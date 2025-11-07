@@ -23,9 +23,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
     try {
+      // 2. --- FIX: Added named parameters ---
       await _authService.signInWithEmail(
-        _emailController.text,
-        _passwordController.text,
+        email: _emailController.text,
+        password: _passwordController.text,
       );
     } catch (e) {
       if (mounted) {
@@ -70,7 +71,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
     try {
-      await _authService.sendPasswordResetEmail(email);
+      // 3. --- FIX: Added named parameter ---
+      await _authService.sendPasswordResetEmail(email: email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -110,6 +112,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- NEW: LOGIC TO SET LOGO COLOR ---
+    // Check if the current theme is dark
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Select the correct color to *tint* the logo
+    final Color logoColor = isDarkMode
+        ? Colors.white // In dark mode, tint the logo white
+        : Theme.of(context).colorScheme.primary; // In light mode, tint it blue
+    // --- END OF NEW LOGIC ---
+
+    // The theme is now applied automatically from main.dart
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -120,10 +133,11 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- Logo ---
+                  // --- UPDATED: Logo is now tinted ---
                   Image.asset(
-                    'assets/images/logo.png',
+                    'lib/assets/images/logo.png', // The single logo file
                     height: 80,
+                    color: logoColor, // Apply the dynamic color tint
                   ),
                   const SizedBox(height: 16),
                   // --- Title ---

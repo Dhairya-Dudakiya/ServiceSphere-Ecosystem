@@ -30,8 +30,7 @@ class _SignupScreenState extends State<SignupScreen> {
         fullName: _fullNameController.text,
       );
       if (mounted) {
-        // Pop until the first route (AuthGate) which will then rebuild
-        // and send the user to the HomeScreen.
+        // Pop back to the login screen, AuthGate will handle the rest
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
@@ -59,9 +58,19 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- NEW: LOGIC TO SET LOGO COLOR ---
+    // Check if the current theme is dark
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Select the correct color to *tint* the logo
+    final Color logoColor = isDarkMode
+        ? Colors.white // In dark mode, tint the logo white
+        : Theme.of(context).colorScheme.primary; // In light mode, tint it blue
+    // --- END OF NEW LOGIC ---
+
     return Scaffold(
       appBar: AppBar(
-        // Adds a clean back button without a title
+        // Adds a clean back button
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -74,10 +83,11 @@ class _SignupScreenState extends State<SignupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- Logo ---
+                  // --- UPDATED: Logo is now tinted ---
                   Image.asset(
-                    'assets/images/logo.png',
+                    'lib/assets/images/logo.png', // The single logo file
                     height: 80,
+                    color: logoColor, // Apply the dynamic color tint
                   ),
                   const SizedBox(height: 16),
                   // --- Title ---
@@ -151,9 +161,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     children: [
                       const Text('Already have an account?'),
                       TextButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () => Navigator.pop(context), // Go back to login
+                        onPressed:
+                            _isLoading ? null : () => Navigator.pop(context),
                         child: const Text('Log In'),
                       ),
                     ],

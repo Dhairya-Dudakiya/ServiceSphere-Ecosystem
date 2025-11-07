@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:servicesphere/auth_gate.dart';
+// 1. --- IMPORT YOUR NEW SPLASH SCREEN ---
+import 'package:servicesphere/features/home/screens/splash_screen.dart';
 import 'firebase_options.dart';
 
 // --- YOUR NEW BRAND COLOR ---
@@ -103,7 +104,9 @@ class MyApp extends StatelessWidget {
       darkTheme: darkTheme, // <-- Set your dark theme
       themeMode: ThemeMode.system, // Automatically switch
       debugShowCheckedModeBanner: false,
-      home: const AuthGate(),
+      // 2. --- THIS IS THE CHANGE ---
+      // We now start the app with the SplashScreen
+      home: const SplashScreen(),
     );
   }
 }
