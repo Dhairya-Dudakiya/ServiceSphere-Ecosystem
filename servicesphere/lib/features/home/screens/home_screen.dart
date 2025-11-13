@@ -1,36 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:servicesphere/features/auth/services/auth_services.dart';
+// 1. --- IMPORT YOUR NEW FILES ---
+import 'package:servicesphere/features/home/models/service_category_model.dart';
+import 'package:servicesphere/features/home/screens/agent_list_screen.dart';
+import 'package:servicesphere/features/home/screens/all_categories_screen.dart';
 
-// --- DATA MODEL FOR YOUR SERVICES ---
-class ServiceCategory {
-  final String name;
-  final IconData icon;
-  final Color color;
-
-  ServiceCategory(
-      {required this.name, required this.icon, required this.color});
-}
-
-// --- YOUR LIST OF SERVICES ---
-// You can (and should) load this from Firestore later!
-final List<ServiceCategory> serviceCategories = [
-  ServiceCategory(name: 'Plumbing', icon: Icons.water_drop, color: Colors.blue),
-  ServiceCategory(
-      name: 'Cleaning', icon: Icons.cleaning_services, color: Colors.cyan),
-  ServiceCategory(
-      name: 'Electrical',
-      icon: Icons.electrical_services,
-      color: Colors.orange),
-  ServiceCategory(
-      name: 'Painting', icon: Icons.format_paint, color: Colors.purple),
-  ServiceCategory(name: 'Appliance', icon: Icons.microwave, color: Colors.red),
-  ServiceCategory(
-      name: 'Carpentry', icon: Icons.carpenter, color: Colors.brown),
-  ServiceCategory(
-      name: 'AC Repair', icon: Icons.ac_unit, color: Colors.lightBlue),
-  ServiceCategory(name: 'More', icon: Icons.grid_view, color: Colors.grey),
-];
+// 2. --- THE OLD ServiceCategory CLASS AND LIST ARE REMOVED ---
+// (They are now in 'service_category_model.dart')
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,6 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
   final User? _user = FirebaseAuth.instance.currentUser;
 
+  // 3. --- GET CATEGORIES FROM THE NEW FUNCTION ---
+  final List<ServiceCategory> homeCategories = getHomeScreenCategories();
+
   String getGreeting() {
     final hour = TimeOfDay.now().hour;
     if (hour < 12) return 'Good Morning';
@@ -52,12 +32,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Get the user's first name, or "User" if not available
     final String displayName = _user?.displayName?.split(' ').first ?? 'User';
 
     return Scaffold(
       appBar: AppBar(
-        // The theme in main.dart will style this
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -90,17 +68,12 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- SEARCH BAR ---
               _buildSearchBar(context),
               const SizedBox(height: 24),
-
-              // --- CATEGORIES SECTION ---
               _buildSectionHeader(context, 'Categories'),
               const SizedBox(height: 16),
               _buildServiceGrid(context),
               const SizedBox(height: 24),
-
-              // --- BOOKINGS SECTION ---
               _buildSectionHeader(context, 'Your Bookings'),
               const SizedBox(height: 16),
               _buildEmptyStateCard(context, 'No active bookings'),
@@ -111,10 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- WIDGET BUILDER METHODS ---
-
   Widget _buildSearchBar(BuildContext context) {
-    // This search bar style is pulled from your inputDecorationTheme
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -134,7 +104,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
-    // A clean header for different sections
     return Text(
       title,
       style: Theme.of(context)
@@ -145,26 +114,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildServiceGrid(BuildContext context) {
-    // The main grid of services
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4, // 4 icons in a row
+        crossAxisCount: 4,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
-      itemCount: serviceCategories.length,
+      // 4. --- USE THE NEW 'homeCategories' LIST ---
+      itemCount: homeCategories.length,
       shrinkWrap: true,
-      physics:
-          const NeverScrollableScrollPhysics(), // Grid is inside SingleChildScrollView
+      physics: const NeverScrollableScrollPhysics(),
       itemBuilder: (context, index) {
-        final category = serviceCategories[index];
-        return ServiceCard(category: category);
+        final category = homeCategories[index];
+        return ServiceCard(
+          category: category,
+        );
       },
     );
   }
 
   Widget _buildEmptyStateCard(BuildContext context, String text) {
-    // A placeholder card for sections without content
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -184,20 +153,40 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- THE NEW, PROFESSIONAL SERVICE CARD WIDGET ---
+// --- UPDATED SERVICE CARD WIDGET ---
 class ServiceCard extends StatelessWidget {
   final ServiceCategory category;
 
-  const ServiceCard({super.key, required this.category});
+  const ServiceCard({
+    super.key,
+    required this.category,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        // TODO: Navigate to this category's page
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tapped on ${category.name}')),
-        );
+        // 5. --- THIS IS THE NEW LOGIC ---
+        // If the card is "More", go to AllCategoriesScreen.
+        // Otherwise, go to the AgentListScreen.
+        if (category.name == 'More') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AllCategoriesScreen(),
+            ),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AgentListScreen(
+                categoryName: category.name,
+              ),
+            ),
+          );
+        }
+        // --- END OF NEW LOGIC ---
       },
       child: Column(
         children: [
@@ -205,7 +194,6 @@ class ServiceCard extends StatelessWidget {
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                // Use the category's color with low opacity for a modern look
                 color: category.color.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(16),
               ),
