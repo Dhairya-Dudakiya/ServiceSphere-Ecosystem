@@ -17,6 +17,15 @@ dependencies:
   cloud_firestore: ^5.1.0
   google_sign_in: ^6.2.1
   google_fonts: ^6.2.1
+  image_picker: ^1.1.2
+  firebase_storage: ^12.1.0
+  intl: ^0.20.2
+  url_launcher: ^6.3.2
+  flutter_rating_bar: ^4.0.1
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
 
 dev_dependencies:
   flutter_test:
@@ -33,5 +42,5 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "lib/assets/images/logo.png"
+  image_path: "lib/assets/images/icon.png"
   # adaptive_icon_background: "#FFFFFF"
