@@ -11,6 +11,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
+  // 1. NEW: Variable to toggle password visibility
+  bool _isObscure = true;
+
   final _formKey = GlobalKey<FormState>();
   final _authService = AuthService();
 
@@ -18,16 +21,23 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   Future<void> _login() async {
+    // 2. NEW: Close keyboard when button is pressed
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _isLoading = true;
     });
+
     try {
-      // 2. --- FIX: Added named parameters ---
       await _authService.signInWithEmail(
-        email: _emailController.text,
+        email: _emailController.text
+            .trim(), // Added trim() to remove accidental spaces
         password: _passwordController.text,
       );
+      // No navigation needed here if you are using AuthGate (StreamBuilder) in main.dart
+      // The stream will detect the login and switch pages automatically.
     } catch (e) {
       if (mounted) {
         _showError(e.toString());
@@ -42,21 +52,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
     try {
       await _authService.signInWithGoogle();
     } catch (e) {
-      if (mounted) {
-        _showError("Failed to sign in: $e");
-      }
+      if (mounted) _showError("Failed to sign in: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -67,11 +69,8 @@ class _LoginScreenState extends State<LoginScreen> {
           isError: false);
       return;
     }
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
     try {
-      // 3. --- FIX: Added named parameter ---
       await _authService.sendPasswordResetEmail(email: email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -82,15 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        _showError(e.toString());
-      }
+      if (mounted) _showError(e.toString());
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -112,17 +105,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // --- NEW: LOGIC TO SET LOGO COLOR ---
-    // Check if the current theme is dark
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color logoColor =
+        isDarkMode ? Colors.white : Theme.of(context).colorScheme.primary;
 
-    // Select the correct color to *tint* the logo
-    final Color logoColor = isDarkMode
-        ? Colors.white // In dark mode, tint the logo white
-        : Theme.of(context).colorScheme.primary; // In light mode, tint it blue
-    // --- END OF NEW LOGIC ---
-
-    // The theme is now applied automatically from main.dart
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -133,14 +119,16 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- UPDATED: Logo is now tinted ---
+                  // --- Logo ---
                   Image.asset(
-                    'lib/assets/images/logo.png', // The single logo file
+                    'assets/images/logo.png', // 3. FIX: Standard path (removed 'lib/')
                     height: 80,
-                    color: logoColor, // Apply the dynamic color tint
+                    color: logoColor,
+                    errorBuilder: (context, error, stackTrace) =>
+                        Icon(Icons.lock, size: 80, color: logoColor),
                   ),
                   const SizedBox(height: 16),
-                  // --- Title ---
+
                   Text(
                     'Welcome Back!',
                     textAlign: TextAlign.center,
@@ -150,7 +138,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  // --- Subtitle ---
                   Text(
                     'Log in to your Service Sphere account',
                     textAlign: TextAlign.center,
@@ -159,6 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                   ),
                   const SizedBox(height: 32),
+
                   // --- Email Field ---
                   TextFormField(
                     controller: _emailController,
@@ -172,18 +160,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         : null,
                   ),
                   const SizedBox(height: 16),
-                  // --- Password Field ---
+
+                  // --- Password Field (UPDATED) ---
                   TextFormField(
                     controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
+                    obscureText: _isObscure, // Uses the variable
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock_outline),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      // 4. NEW: Eye Icon Button
+                      suffixIcon: IconButton(
+                        icon: Icon(_isObscure
+                            ? Icons.visibility_off
+                            : Icons.visibility),
+                        onPressed: () {
+                          setState(() {
+                            _isObscure = !_isObscure;
+                          });
+                        },
+                      ),
                     ),
                     validator: (value) => value == null || value.length < 6
                         ? 'Password must be at least 6 characters'
                         : null,
                   ),
+
                   // --- Forgot Password Button ---
                   Align(
                     alignment: Alignment.centerRight,
@@ -193,14 +194,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // --- Login Button ---
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                          onPressed: _login,
-                          child: const Text('Log In'),
-                        ),
+                  SizedBox(
+                    height: 50, // Fixed height for professional look
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _login,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text('Log In',
+                              style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
+
                   // --- Divider ---
                   Row(
                     children: [
@@ -216,22 +228,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+
                   // --- Google Button ---
                   OutlinedButton.icon(
                     onPressed: _isLoading ? null : _signInWithGoogle,
-                    icon: const Icon(Icons.login), // Material Icon for Google
+                    icon: const Icon(Icons.g_mobiledata,
+                        size: 28), // Or custom asset
                     label: const Text('Continue with Google'),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                      ),
-                      side: BorderSide(
-                        color: Theme.of(context).colorScheme.outline,
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // --- Sign Up Navigation ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

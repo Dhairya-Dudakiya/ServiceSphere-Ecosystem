@@ -4,14 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-// --- FEATURE IMPORTS ---
 import 'package:servicesphere/features/profile/screens/profile_screen.dart';
 import 'package:servicesphere/features/home/models/service_category_model.dart';
 import 'package:servicesphere/features/home/screens/all_categories_screen.dart';
 import 'package:servicesphere/features/booking/book_service_screen.dart';
 import 'package:servicesphere/features/notification/notification_screen.dart';
-import 'package:servicesphere/features/rating/rate_agent_screen.dart'; // Ensure this path matches your file
+import 'package:servicesphere/features/rating/rate_agent_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,26 +20,52 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
-  final List<ServiceCategory> homeCategories = getHomeScreenCategories();
+  final List<ServiceCategory> _allCategories = getHomeScreenCategories();
+
+  // --- 1. SEARCH VARIABLES ---
+  final TextEditingController _searchController = TextEditingController();
+  List<ServiceCategory> _filteredCategories = [];
+  String _searchQuery = "";
 
   StreamSubscription? _jobListener;
 
   @override
   void initState() {
     super.initState();
+    // Initialize filtered list with all categories
+    _filteredCategories = _allCategories;
+
+    // Listen to search input
+    _searchController.addListener(_onSearchChanged);
+
     _listenForJobUpdates();
   }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     _jobListener?.cancel();
     super.dispose();
   }
 
-  // --- REAL-TIME ALERTS ---
+  // --- 2. SEARCH LOGIC ---
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredCategories = _allCategories;
+      } else {
+        _filteredCategories = _allCategories.where((category) {
+          return category.name.toLowerCase().contains(query);
+        }).toList();
+      }
+    });
+  }
+
   void _listenForJobUpdates() {
     if (_user == null) return;
-
     _jobListener = FirebaseFirestore.instance
         .collection('serviceRequests')
         .where('customerId', isEqualTo: _user!.uid)
@@ -60,8 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 behavior: SnackBarBehavior.floating,
                 backgroundColor: Colors.green,
                 margin: const EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
                 content: Row(
                   children: [
                     const Icon(Icons.check_circle, color: Colors.white),
@@ -104,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
-          // --- 1. APP BAR ---
+          // --- APP BAR ---
           SliverAppBar(
             expandedHeight: 80.0,
             floating: true,
@@ -132,9 +154,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? displayName[0].toUpperCase()
                                 : 'U',
                             style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold),
                           )
                         : null,
                   ),
@@ -143,21 +164,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      getGreeting(),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      displayName,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                        fontSize: 18,
-                      ),
-                    ),
+                    Text(getGreeting(),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey[600], fontSize: 12)),
+                    Text(displayName,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                            fontSize: 18)),
                   ],
                 ),
               ],
@@ -167,15 +181,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.notifications_none_rounded,
                     color: Colors.black87),
                 onPressed: () {
-                  // Ensure NotificationScreen exists
-                  // Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationScreen()));
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const NotificationsScreen()));
                 },
               ),
               const SizedBox(width: 8),
             ],
           ),
 
-          // --- 2. SEARCH BAR ---
+          // --- SEARCH BAR (UPDATED) ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -183,95 +199,105 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- 3. PROMO BANNER ---
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: _buildPromoBanner(theme),
+          // --- PROMO BANNER (Hide when searching to focus on results) ---
+          if (_searchQuery.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _buildPromoBanner(theme),
+              ),
             ),
-          ),
 
-          // --- 4. CATEGORIES HEADER ---
+          // --- CATEGORIES HEADER ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-              child:
-                  _buildSectionHeader(context, 'What do you need help with?'),
+              child: _buildSectionHeader(
+                  context,
+                  _searchQuery.isEmpty
+                      ? 'What do you need help with?'
+                      : 'Search Results'),
             ),
           ),
 
-          // --- 5. CATEGORIES GRID ---
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.75,
+          // --- 5. CATEGORIES GRID (UPDATED) ---
+          if (_filteredCategories.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Center(
+                    child: Text("No services found for '$_searchQuery'",
+                        style: TextStyle(color: Colors.grey[600]))),
               ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final category = homeCategories[index];
-                  return ServiceCard(category: category);
-                },
-                childCount: homeCategories.length,
-              ),
-            ),
-          ),
-
-          // --- 6. BOOKINGS HEADER ---
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
-              child: _buildSectionHeader(context, 'Active Bookings'),
-            ),
-          ),
-
-          // --- 7. REAL-TIME BOOKINGS LIST ---
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('serviceRequests')
-                .where('customerId', isEqualTo: _user?.uid)
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                );
-              }
-
-              final docs = snapshot.data?.docs ?? [];
-
-              if (docs.isEmpty) {
-                return SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildEmptyStateCard(context, 'No active bookings'),
-                  ),
-                );
-              }
-
-              return SliverList(
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 0.75,
+                ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    // Pass the Document ID ('doc.id') for updates
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: BookingCard(data: data, jobId: doc.id),
-                    );
+                    final category =
+                        _filteredCategories[index]; // Use Filtered List
+                    return ServiceCard(category: category);
                   },
-                  childCount: docs.length,
+                  childCount: _filteredCategories.length,
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+
+          // --- BOOKINGS HEADER (Hide if searching) ---
+          if (_searchQuery.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
+                child: _buildSectionHeader(context, 'Active Bookings'),
+              ),
+            ),
+
+          // --- REAL-TIME BOOKINGS LIST (Hide if searching) ---
+          if (_searchQuery.isEmpty)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('serviceRequests')
+                  .where('customerId', isEqualTo: _user?.uid)
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SliverToBoxAdapter(
+                      child: Center(child: CircularProgressIndicator()));
+                }
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child:
+                          _buildEmptyStateCard(context, 'No active bookings'),
+                    ),
+                  );
+                }
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final doc = docs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: BookingCard(data: data, jobId: doc.id),
+                      );
+                    },
+                    childCount: docs.length,
+                  ),
+                );
+              },
+            ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
@@ -287,19 +313,29 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
-      child: const TextField(
+      child: TextField(
+        controller: _searchController, // Linked Controller
         decoration: InputDecoration(
           hintText: 'Search for cleaning, repair...',
-          hintStyle: TextStyle(color: Colors.grey),
-          prefixIcon: Icon(Icons.search, color: Colors.grey),
+          hintStyle: const TextStyle(color: Colors.grey),
+          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          // Clear Button
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.grey),
+                  onPressed: () {
+                    _searchController.clear();
+                    FocusScope.of(context).unfocus(); // Close keyboard
+                  },
+                )
+              : null,
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
@@ -318,10 +354,9 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: theme.primaryColor.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
+              color: theme.primaryColor.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 5))
         ],
       ),
       child: const Column(
@@ -347,11 +382,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-    );
+    return Text(title,
+        style: const TextStyle(
+            fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87));
   }
 
   Widget _buildEmptyStateCard(BuildContext context, String text) {
@@ -408,7 +441,7 @@ class ServiceCard extends StatelessWidget {
                   BoxShadow(
                       color: Colors.black.withOpacity(0.03),
                       blurRadius: 10,
-                      offset: const Offset(0, 4)),
+                      offset: const Offset(0, 4))
                 ],
               ),
               child: Center(
@@ -439,7 +472,6 @@ class ServiceCard extends StatelessWidget {
   }
 }
 
-// --- BOOKING CARD WITH AGENT INFO, CALL & OTP ---
 class BookingCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String jobId;
@@ -469,8 +501,6 @@ class BookingCard extends StatelessWidget {
     final String? agentId = data['agentId'];
     final double? agentRating = data['agentRating']?.toDouble();
     final bool isRated = data['isRated'] ?? false;
-
-    // --- 1. GET THE OTP ---
     final String? completionOtp = data['completionOtp'];
 
     String dateStr = 'Just now';
@@ -490,15 +520,13 @@ class BookingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
         ],
       ),
       child: Column(
         children: [
-          // Row 1: Basic Info
           Row(
             children: [
               Container(
@@ -534,13 +562,11 @@ class BookingCard extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8)),
-                    child: Text(
-                      status.toString().toUpperCase(),
-                      style: TextStyle(
-                          color: statusColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold),
-                    ),
+                    child: Text(status.toString().toUpperCase(),
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 8),
                   Text("₹ $price",
@@ -551,7 +577,7 @@ class BookingCard extends StatelessWidget {
             ],
           ),
 
-          // --- 2. OTP DISPLAY (Visible ONLY when Accepted) ---
+          // OTP
           if (status == 'accepted' && completionOtp != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -567,25 +593,22 @@ class BookingCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.key, size: 16, color: Colors.green),
                   const SizedBox(width: 8),
-                  Text(
-                    "Start OTP: ",
-                    style: TextStyle(
-                        color: Colors.green[800], fontWeight: FontWeight.w500),
-                  ),
-                  Text(
-                    completionOtp,
-                    style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        letterSpacing: 2),
-                  ),
+                  Text("Start OTP: ",
+                      style: TextStyle(
+                          color: Colors.green[800],
+                          fontWeight: FontWeight.w500)),
+                  Text(completionOtp,
+                      style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          letterSpacing: 2)),
                 ],
               ),
             ),
           ],
 
-          // Row 3: Agent Info & Actions
+          // Agent Info
           if ((status == 'accepted' || status == 'completed') &&
               agentName != null) ...[
             const SizedBox(height: 12),
@@ -626,32 +649,24 @@ class BookingCard extends StatelessWidget {
                     constraints: const BoxConstraints(),
                     padding: EdgeInsets.zero,
                   ),
-
-                // Rate Button
                 if (status == 'completed' && !isRated)
                   TextButton.icon(
                     onPressed: () {
                       Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => RateAgentScreen(
-                            jobId: jobId,
-                            agentId: agentId ?? '',
-                            agentName: agentName,
-                          ),
-                        ),
-                      );
+                          context,
+                          MaterialPageRoute(
+                              builder: (c) => RateAgentScreen(
+                                  jobId: jobId,
+                                  agentId: agentId ?? '',
+                                  agentName: agentName)));
                     },
                     icon: const Icon(Icons.star_outline,
                         size: 18, color: Colors.amber),
                     label: const Text("Rate"),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      visualDensity: VisualDensity.compact,
-                    ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        visualDensity: VisualDensity.compact),
                   ),
-
-                // Rated Badge
                 if (status == 'completed' && isRated)
                   const Text("You rated this",
                       style: TextStyle(
