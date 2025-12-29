@@ -8,6 +8,9 @@ import 'package:servicesphereagent/features/jobs/screens/job_details_screen.dart
 import 'package:servicesphereagent/features/jobs/screens/my_active_jobs_screen.dart';
 import 'package:servicesphereagent/features/jobs/screens/my_completed_jobs_screen.dart';
 import 'package:servicesphereagent/features/jobs/screens/job_feed_screen.dart';
+import 'package:servicesphereagent/features/profile/screens/agent_profile_screen.dart';
+// --- NEW IMPORT FOR WALLET ---
+import 'package:servicesphereagent/features/wallet/screens/wallet_screen.dart';
 
 class AgentHomeScreen extends StatefulWidget {
   const AgentHomeScreen({super.key});
@@ -18,6 +21,7 @@ class AgentHomeScreen extends StatefulWidget {
 
 class _AgentHomeScreenState extends State<AgentHomeScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
+  int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -28,111 +32,173 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F9),
-      body: CustomScrollView(
-        slivers: [
-          // --- 1. APP BAR ---
-          SliverAppBar(
-            expandedHeight: 80.0,
-            floating: true,
-            pinned: true,
-            elevation: 0,
-            backgroundColor: Colors.white,
-            automaticallyImplyLeading: false,
-            title: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: theme.primaryColor.withOpacity(0.1),
-                  backgroundImage: photoUrl.isNotEmpty
-                      ? NetworkImage(photoUrl)
-                      : null,
-                  child: photoUrl.isEmpty
-                      ? Icon(Icons.person, color: theme.primaryColor)
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hello, $displayName',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    Text(
-                      'Online & Ready',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.green,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+
+      // --- 1. BODY SWITCHER ---
+      body: _buildBody(theme, displayName, photoUrl),
+
+      // --- 2. BOTTOM NAVIGATION BAR (MATCHES EARNINGS COLOR) ---
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            return const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            );
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          backgroundColor: theme.primaryColor, // Matches Earnings Card
+          indicatorColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 10,
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.dashboard_outlined, color: Colors.white70),
+              selectedIcon: Icon(Icons.dashboard, color: theme.primaryColor),
+              label: 'Home',
             ),
-            actions: [
-              IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Notifications coming soon!")),
-                  );
-                },
-                icon: const Icon(
-                  Icons.notifications_outlined,
-                  color: Colors.black87,
-                ),
+            NavigationDestination(
+              icon: const Icon(Icons.list_alt, color: Colors.white70),
+              selectedIcon: Icon(Icons.list_alt, color: theme.primaryColor),
+              label: 'Jobs',
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline, color: Colors.white70),
+              selectedIcon: Icon(Icons.person, color: theme.primaryColor),
+              label: 'Profile',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- 3. BODY CONTENT SWITCHER ---
+  Widget _buildBody(ThemeData theme, String displayName, String photoUrl) {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildDashboardView(theme, displayName, photoUrl);
+      case 1:
+        return const JobsFeedScreen();
+      case 2:
+        return const AgentProfileScreen();
+      default:
+        return _buildDashboardView(theme, displayName, photoUrl);
+    }
+  }
+
+  // --- 4. THE DASHBOARD VIEW ---
+  Widget _buildDashboardView(
+    ThemeData theme,
+    String displayName,
+    String photoUrl,
+  ) {
+    return CustomScrollView(
+      slivers: [
+        // --- APP BAR ---
+        SliverAppBar(
+          expandedHeight: 80.0,
+          floating: true,
+          pinned: true,
+          elevation: 0,
+          backgroundColor: Colors.white,
+          automaticallyImplyLeading: false,
+          title: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: theme.primaryColor.withOpacity(0.1),
+                backgroundImage: photoUrl.isNotEmpty
+                    ? NetworkImage(photoUrl)
+                    : null,
+                child: photoUrl.isEmpty
+                    ? Icon(Icons.person, color: theme.primaryColor)
+                    : null,
               ),
-            ],
-          ),
-
-          // --- 2. DYNAMIC STATS GRID ---
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverToBoxAdapter(child: _buildRealTimeStats(context)),
-          ),
-
-          // --- 3. HEADER ---
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "New Opportunities",
-                    style: theme.textTheme.titleLarge?.copyWith(
+                    'Hello, $displayName',
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                      color: Colors.black87,
                     ),
                   ),
-                  // --- NAVIGATION: SEE ALL ---
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const JobsFeedScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text("See All"),
+                  Text(
+                    'Online & Ready',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Notifications coming soon!")),
+                );
+              },
+              icon: const Icon(
+                Icons.notifications_outlined,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+
+        // --- STATS GRID ---
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverToBoxAdapter(child: _buildRealTimeStats(context)),
+        ),
+
+        // --- HEADER ---
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "New Opportunities",
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                    fontSize: 18,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _selectedIndex = 1);
+                  },
+                  child: const Text("See All"),
+                ),
+              ],
             ),
           ),
+        ),
 
-          // --- 4. JOB LIST ---
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: _buildMarketplaceList(context),
-          ),
+        // --- JOB LIST ---
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: _buildMarketplaceList(context),
+        ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
-        ],
-      ),
+        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+      ],
     );
   }
 
@@ -178,70 +244,82 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
 
             return Column(
               children: [
-                // Earnings Card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).primaryColor.withOpacity(0.8),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(context).primaryColor.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
+                // --- 1. EARNINGS CARD (Now Clickable!) ---
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const WalletScreen(),
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Total Earnings",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.currency_rupee,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).primaryColor,
+                          Theme.of(context).primaryColor.withOpacity(0.8),
                         ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        "₹ ${NumberFormat('#,##0').format(earnings)}",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Total Earnings",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.currency_rupee,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          "₹ ${NumberFormat('#,##0').format(earnings)}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Stats Row (Equal Sized Boxes)
+                // --- 2. STATS ROW ---
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -290,7 +368,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                       ),
                       const SizedBox(width: 12),
 
-                      // RATING -> No navigation yet
+                      // RATING -> Navigates to MyReviewsScreen
                       Expanded(
                         child: _buildStatCard(
                           label: "Rating",
@@ -315,6 +393,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     required String value,
     required IconData icon,
     required Color color,
+    VoidCallback? onTap,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
@@ -362,7 +441,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('serviceRequests')
-          .where('status', isEqualTo: 'pending')
+          .where('status', whereIn: ['pending', 'pending_quote'])
           .orderBy('createdAt', descending: true)
           .limit(10)
           .snapshots(),
@@ -375,12 +454,15 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
             ),
           );
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
           return SliverToBoxAdapter(child: _buildEmptyState(context));
         }
+
         return SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {
-            final job = snapshot.data!.docs[index];
+            final job = docs[index];
             final data = job.data() as Map<String, dynamic>;
             return JobCardWidget(
               jobData: data,
@@ -394,7 +476,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                 );
               },
             );
-          }, childCount: snapshot.data!.docs.length),
+          }, childCount: docs.length),
         );
       },
     );
@@ -421,7 +503,6 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
   }
 }
 
-// --- REUSABLE JOB CARD (Professional Layout) ---
 class JobCardWidget extends StatelessWidget {
   final Map<String, dynamic> jobData;
   final VoidCallback onTap;
@@ -438,7 +519,6 @@ class JobCardWidget extends StatelessWidget {
     final Timestamp? timestamp = jobData['createdAt'];
     final Timestamp? scheduledTime = jobData['scheduledTime'];
 
-    // Time Logic: Prefer scheduled time, fallback to created time
     String timeDisplay = 'Just now';
     if (scheduledTime != null) {
       timeDisplay = DateFormat('MMM d, h:mm a').format(scheduledTime.toDate());
@@ -472,7 +552,6 @@ class JobCardWidget extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Icon Box (Left)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -482,13 +561,10 @@ class JobCardWidget extends StatelessWidget {
                 child: Icon(Icons.work, color: theme.primaryColor, size: 24),
               ),
               const SizedBox(width: 16),
-
-              // 2. Details Column (Middle - Expands)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Category Tag
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -508,8 +584,6 @@ class JobCardWidget extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-
-                    // Title
                     Text(
                       title,
                       style: const TextStyle(
@@ -521,8 +595,6 @@ class JobCardWidget extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-
-                    // Address
                     Row(
                       children: [
                         Icon(
@@ -547,14 +619,11 @@ class JobCardWidget extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // 3. Meta Data Column (Right - Aligned End)
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Row 1: Time
                   Row(
                     children: [
                       Icon(
@@ -569,16 +638,24 @@ class JobCardWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20), // Spacing
-                  // Row 2: Price
-                  Text(
-                    '₹ ${price.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: theme.primaryColor,
-                    ),
-                  ),
+                  const SizedBox(height: 20),
+                  price > 0
+                      ? Text(
+                          '₹ ${price.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            color: theme.primaryColor,
+                          ),
+                        )
+                      : Text(
+                          'Needs Quote',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Colors.orange,
+                          ),
+                        ),
                 ],
               ),
             ],

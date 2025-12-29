@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math'; // Required for OTP generation
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// --- FEATURE IMPORTS ---
 import 'package:servicesphere/features/profile/screens/profile_screen.dart';
 import 'package:servicesphere/features/home/models/service_category_model.dart';
 import 'package:servicesphere/features/home/screens/all_categories_screen.dart';
@@ -20,9 +23,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
-  final List<ServiceCategory> _allCategories = getHomeScreenCategories();
+  final List<ServiceCategory> homeCategories = getHomeScreenCategories();
 
-  // --- 1. SEARCH VARIABLES ---
+  // Search variables
   final TextEditingController _searchController = TextEditingController();
   List<ServiceCategory> _filteredCategories = [];
   String _searchQuery = "";
@@ -32,12 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize filtered list with all categories
-    _filteredCategories = _allCategories;
-
-    // Listen to search input
+    _filteredCategories = homeCategories;
     _searchController.addListener(_onSearchChanged);
-
     _listenForJobUpdates();
   }
 
@@ -49,23 +48,25 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --- 2. SEARCH LOGIC ---
+  // --- SEARCH LOGIC ---
   void _onSearchChanged() {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _searchQuery = query;
       if (query.isEmpty) {
-        _filteredCategories = _allCategories;
+        _filteredCategories = homeCategories;
       } else {
-        _filteredCategories = _allCategories.where((category) {
+        _filteredCategories = homeCategories.where((category) {
           return category.name.toLowerCase().contains(query);
         }).toList();
       }
     });
   }
 
+  // --- REAL-TIME ALERTS ---
   void _listenForJobUpdates() {
     if (_user == null) return;
+
     _jobListener = FirebaseFirestore.instance
         .collection('serviceRequests')
         .where('customerId', isEqualTo: _user!.uid)
@@ -78,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final title = data['title'] ?? 'Service';
           final agentName = data['agentName'] ?? 'A professional';
 
+          // Alert for Accepted Job
           if (status == 'accepted' && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -88,17 +90,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     const Icon(Icons.check_circle, color: Colors.white),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text("Job Accepted!",
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text("$agentName is on the way for '$title'"),
-                        ],
-                      ),
-                    ),
+                    Expanded(child: Text("Agent accepted: '$title'")),
+                  ],
+                ),
+              ),
+            );
+          }
+          // Alert for New Quote
+          if (status == 'pending_approval' && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.purple,
+                margin: const EdgeInsets.all(16),
+                content: Row(
+                  children: [
+                    const Icon(Icons.attach_money, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text("New Quote Received for '$title'")),
                   ],
                 ),
               ),
@@ -126,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
-          // --- APP BAR ---
+          // --- 1. APP BAR ---
           SliverAppBar(
             expandedHeight: 80.0,
             floating: true,
@@ -154,8 +163,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? displayName[0].toUpperCase()
                                 : 'U',
                             style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold),
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
                           )
                         : null,
                   ),
@@ -164,14 +174,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(getGreeting(),
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: Colors.grey[600], fontSize: 12)),
-                    Text(displayName,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                            fontSize: 18)),
+                    Text(
+                      getGreeting(),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      displayName,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        fontSize: 18,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -182,16 +199,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.black87),
                 onPressed: () {
                   Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const NotificationsScreen()));
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen()),
+                  );
                 },
               ),
               const SizedBox(width: 8),
             ],
           ),
 
-          // --- SEARCH BAR (UPDATED) ---
+          // --- 2. SEARCH BAR ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -199,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- PROMO BANNER (Hide when searching to focus on results) ---
+          // --- 3. PROMO BANNER ---
           if (_searchQuery.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -208,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // --- CATEGORIES HEADER ---
+          // --- 4. CATEGORIES HEADER ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
@@ -220,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- 5. CATEGORIES GRID (UPDATED) ---
+          // --- 5. CATEGORIES GRID ---
           if (_filteredCategories.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -242,8 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final category =
-                        _filteredCategories[index]; // Use Filtered List
+                    final category = _filteredCategories[index];
                     return ServiceCard(category: category);
                   },
                   childCount: _filteredCategories.length,
@@ -251,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // --- BOOKINGS HEADER (Hide if searching) ---
+          // --- 6. BOOKINGS HEADER ---
           if (_searchQuery.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -260,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // --- REAL-TIME BOOKINGS LIST (Hide if searching) ---
+          // --- 7. REAL-TIME BOOKINGS LIST ---
           if (_searchQuery.isEmpty)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -271,9 +288,15 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SliverToBoxAdapter(
-                      child: Center(child: CircularProgressIndicator()));
+                    child: Padding(
+                      padding: EdgeInsets.all(20.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  );
                 }
+
                 final docs = snapshot.data?.docs ?? [];
+
                 if (docs.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Padding(
@@ -283,6 +306,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }
+
                 return SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -313,24 +337,24 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4)),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: TextField(
-        controller: _searchController, // Linked Controller
+        controller: _searchController,
         decoration: InputDecoration(
           hintText: 'Search for cleaning, repair...',
           hintStyle: const TextStyle(color: Colors.grey),
           prefixIcon: const Icon(Icons.search, color: Colors.grey),
-          // Clear Button
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear, color: Colors.grey),
                   onPressed: () {
                     _searchController.clear();
-                    FocusScope.of(context).unfocus(); // Close keyboard
+                    FocusScope.of(context).unfocus();
                   },
                 )
               : null,
@@ -354,9 +378,10 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: theme.primaryColor.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 5))
+            color: theme.primaryColor.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
         ],
       ),
       child: const Column(
@@ -382,9 +407,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
-    return Text(title,
-        style: const TextStyle(
-            fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87));
+    return Text(
+      title,
+      style: const TextStyle(
+          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+    );
   }
 
   Widget _buildEmptyStateCard(BuildContext context, String text) {
@@ -472,6 +499,7 @@ class ServiceCard extends StatelessWidget {
   }
 }
 
+// --- BOOKING CARD (With Red Cancel, Quote Logic & OTP) ---
 class BookingCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String jobId;
@@ -486,6 +514,86 @@ class BookingCard extends StatelessWidget {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Could not launch dialer")));
+    }
+  }
+
+  // --- 1. CANCEL LOGIC ---
+  Future<void> _cancelJob(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Cancel Request?"),
+        content: const Text("This will remove your job request. Are you sure?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("No")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Yes, Cancel",
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('serviceRequests')
+            .doc(jobId)
+            .delete();
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Request Cancelled")));
+      } catch (e) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
+  }
+
+  // --- 2. ACCEPT QUOTE (WITH OTP) ---
+  Future<void> _acceptQuote(BuildContext context) async {
+    try {
+      final random = Random();
+      final otp = (1000 + random.nextInt(9000)).toString();
+
+      await FirebaseFirestore.instance
+          .collection('serviceRequests')
+          .doc(jobId)
+          .update({
+        'status': 'accepted',
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'completionOtp': otp,
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Quote Accepted!"), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  // --- 3. REJECT QUOTE ---
+  Future<void> _rejectQuote(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('serviceRequests')
+          .doc(jobId)
+          .update({
+        'status': 'pending_quote',
+        'price': 0.0,
+        'agentId': FieldValue.delete(),
+        'agentName': FieldValue.delete(),
+        'agentRating': FieldValue.delete(),
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Quote Rejected.")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
@@ -511,6 +619,7 @@ class BookingCard extends StatelessWidget {
     Color statusColor = Colors.orange;
     if (status == 'accepted') statusColor = Colors.blue;
     if (status == 'completed') statusColor = Colors.green;
+    if (status == 'pending_approval') statusColor = Colors.purple;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -520,13 +629,15 @@ class BookingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
         children: [
+          // Row 1: Basic Info
           Row(
             children: [
               Container(
@@ -543,9 +654,12 @@ class BookingCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // --- DARKER TITLE ---
                     Text(title,
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
+                            fontWeight: FontWeight.w900, // EXTRA BOLD
+                            fontSize: 16,
+                            color: Colors.black)), // PURE BLACK
                     const SizedBox(height: 4),
                     Text(dateStr,
                         style:
@@ -562,22 +676,108 @@ class BookingCard extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8)),
-                    child: Text(status.toString().toUpperCase(),
-                        style: TextStyle(
-                            color: statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold)),
+                    child: Text(
+                      status.toString().toUpperCase().replaceAll('_', ' '),
+                      style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold),
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  Text("₹ $price",
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  if (status == 'pending_approval')
+                    Text("₹ $price",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.purple))
+                  else if (price > 0)
+                    Text("₹ $price",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14))
+                  else
+                    const Text("Waiting Quote",
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ],
           ),
 
-          // OTP
+          // --- RED CANCEL BUTTON (Only if Pending) ---
+          if (status == 'pending' || status == 'pending_quote') ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () => _cancelJob(context),
+                icon: const Icon(Icons.cancel_outlined,
+                    size: 18, color: Colors.red),
+                label: const Text("Cancel Request",
+                    style: TextStyle(
+                        color: Colors.red, fontWeight: FontWeight.bold)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  backgroundColor: Colors.red.withOpacity(0.05),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          ],
+
+          // --- QUOTE APPROVAL SECTION ---
+          if (status == 'pending_approval') ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.purple.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.purple.withOpacity(0.2)),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    "Agent offered: ₹${price.toStringAsFixed(0)}",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.purple),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _rejectQuote(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                          ),
+                          child: const Text("Reject"),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _acceptQuote(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text("Accept"),
+                        ),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ],
+
+          // --- OTP DISPLAY ---
           if (status == 'accepted' && completionOtp != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -608,7 +808,7 @@ class BookingCard extends StatelessWidget {
             ),
           ],
 
-          // Agent Info
+          // Agent Info & Actions
           if ((status == 'accepted' || status == 'completed') &&
               agentName != null) ...[
             const SizedBox(height: 12),
@@ -649,24 +849,32 @@ class BookingCard extends StatelessWidget {
                     constraints: const BoxConstraints(),
                     padding: EdgeInsets.zero,
                   ),
+
+                // Rate Button
                 if (status == 'completed' && !isRated)
                   TextButton.icon(
                     onPressed: () {
                       Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (c) => RateAgentScreen(
-                                  jobId: jobId,
-                                  agentId: agentId ?? '',
-                                  agentName: agentName)));
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RateAgentScreen(
+                            jobId: jobId,
+                            agentId: agentId ?? '',
+                            agentName: agentName,
+                          ),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.star_outline,
                         size: 18, color: Colors.amber),
                     label: const Text("Rate"),
                     style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        visualDensity: VisualDensity.compact),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      visualDensity: VisualDensity.compact,
+                    ),
                   ),
+
+                // Rated Badge
                 if (status == 'completed' && isRated)
                   const Text("You rated this",
                       style: TextStyle(

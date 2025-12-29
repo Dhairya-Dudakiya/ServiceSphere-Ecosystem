@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart'; // REQUIRED: flutter pub add permission_handler
-import 'package:servicesphere/auth_gate.dart'; // Change to 'servicesphereagent' if using in Agent App
+import 'package:permission_handler/permission_handler.dart';
+import 'package:servicesphereagent/auth_gate.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -34,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // 2. Content fade in (Text + Loader)
+    // 2. Content fade in
     _contentFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
@@ -45,34 +45,33 @@ class _SplashScreenState extends State<SplashScreen>
     // 3. Text slide up
     _textSlideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
-      ),
-    );
+          CurvedAnimation(
+            parent: _animationController,
+            curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _animationController.forward();
 
-    // --- START INITIALIZATION LOGIC ---
+    // Start initialization logic
     _initializeApp();
   }
 
-  // --- LOGIC: Ask Permission & Navigate ---
+  // --- INITIALIZATION LOGIC ---
   Future<void> _initializeApp() async {
-    // 1. Wait 1 second for the logo animation to pop so it looks nice
+    // 1. Wait for animation
     await Future.delayed(const Duration(seconds: 1));
 
-    // 2. Request Location Permission
-    // This will show the system dialog on top of your splash screen
+    // 2. Ask Permission (Crucial for Agent Navigation)
     await Permission.location.request();
 
-    // 3. Wait a bit more to ensure the user sees the branding (Total ~3.5 sec)
+    // 3. Minimum splash time
     await Future.delayed(const Duration(milliseconds: 2500));
 
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const AuthGate(),
+          pageBuilder: (_, __, ___) => const AgentAuthGate(), // Go to Auth Gate
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -92,10 +91,11 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final primaryColor = theme.colorScheme.primary;
+
+    // Agent Brand Color (Green)
+    const primaryColor = Color(0xFF2E7D32);
 
     return Scaffold(
-      // Gradient background: Primary Color (Blue) in Light Mode, Dark in Dark Mode
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // --- LOGO SECTION ---
+              // --- LOGO ---
               ScaleTransition(
                 scale: _logoScaleAnimation,
                 child: Container(
@@ -119,8 +119,7 @@ class _SplashScreenState extends State<SplashScreen>
                   padding: const EdgeInsets.all(25),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white
-                        .withOpacity(0.1), // Subtle white glass effect
+                    color: Colors.white.withOpacity(0.1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
@@ -131,14 +130,14 @@ class _SplashScreenState extends State<SplashScreen>
                     ],
                   ),
                   child: Image.asset(
-                    'lib/assets/images/logo.png', // Standard Asset Path
-                    color: Colors.white, // White Logo
+                    'lib/assets/images/icon.png',
+                    color: Colors.white,
                   ),
                 ),
               ),
               const SizedBox(height: 40),
 
-              // --- TEXT SECTION ---
+              // --- TEXT ---
               SlideTransition(
                 position: _textSlideAnimation,
                 child: FadeTransition(
@@ -146,16 +145,16 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Column(
                     children: [
                       Text(
-                        'Service Sphere',
+                        'Service Partner', // Different Title for Agent App
                         style: theme.textTheme.displaySmall?.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: Colors.white, // White text
+                          color: Colors.white,
                           letterSpacing: -0.5,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'CONNECT • SELECT • SOLVE',
+                        'EARN • GROW • SUCCEED', // Different Tagline
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white.withOpacity(0.8),
                           letterSpacing: 3.0,
@@ -170,7 +169,7 @@ class _SplashScreenState extends State<SplashScreen>
 
               const SizedBox(height: 60),
 
-              // --- LOADING INDICATOR ---
+              // --- LOADER ---
               FadeTransition(
                 opacity: _contentFadeAnimation,
                 child: const SizedBox(
@@ -178,8 +177,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.white), // White Loader
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 ),
               ),

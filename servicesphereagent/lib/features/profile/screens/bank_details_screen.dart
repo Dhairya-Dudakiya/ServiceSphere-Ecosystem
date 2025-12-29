@@ -4,67 +4,115 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class BankDetailsScreen extends StatefulWidget {
   const BankDetailsScreen({super.key});
+
   @override
   State<BankDetailsScreen> createState() => _BankDetailsScreenState();
 }
 
 class _BankDetailsScreenState extends State<BankDetailsScreen> {
-  final _bankNameController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _holderNameController = TextEditingController();
   final _accountNumberController = TextEditingController();
   final _ifscController = TextEditingController();
+  final _bankNameController = TextEditingController();
+
   bool _isLoading = false;
 
-  // Theme Constants
-  static const Color kMainText = Color(0xFF111827);
-  static const Color kSecondaryText = Color(0xFF6B7280);
-  static const Color kBorderColor = Color(0xFFE5E7EB);
+  // List of major banks for autocomplete
+  static const List<String> _bankOptions = [
+    'HDFC Bank',
+    'ICICI Bank',
+    'State Bank of India (SBI)',
+    'Axis Bank',
+    'Kotak Mahindra Bank',
+    'IndusInd Bank',
+    'Yes Bank',
+    'Punjab National Bank (PNB)',
+    'Bank of Baroda',
+    'Bank of India',
+    'Union Bank of India',
+    'Canara Bank',
+    'IDFC First Bank',
+    'Federal Bank',
+    'Indian Bank',
+    'Central Bank of India',
+    'IDBI Bank',
+    'Bandhan Bank',
+    'RBL Bank',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadBankData();
+    _loadBankDetails();
   }
 
-  Future<void> _loadBankData() async {
+  Future<void> _loadBankDetails() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('agents')
-          .doc(user.uid)
-          .get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        _bankNameController.text = data['bankName'] ?? '';
-        _accountNumberController.text = data['accountNumber'] ?? '';
-        _ifscController.text = data['ifscCode'] ?? '';
-        if (mounted) setState(() {});
-      }
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance
+        .collection('agents')
+        .doc(user.uid)
+        .get();
+
+    if (doc.exists && doc.data()!.containsKey('bankDetails')) {
+      final data = doc.data()!['bankDetails'] as Map<String, dynamic>;
+      _holderNameController.text = data['holderName'] ?? '';
+      _accountNumberController.text = data['accountNumber'] ?? '';
+      _ifscController.text = data['ifscCode'] ?? '';
+      _bankNameController.text = data['bankName'] ?? '';
+      setState(() {}); // Refresh UI
     }
   }
 
-  Future<void> _saveBankDetails() async {
+  Future<void> _saveDetails() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    String finalBankName = _bankNameController.text.trim();
+    if (finalBankName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select or enter a Bank Name")),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
+
     try {
       final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
       await FirebaseFirestore.instance
           .collection('agents')
-          .doc(user!.uid)
+          .doc(user.uid)
           .update({
-            'bankName': _bankNameController.text.trim(),
-            'accountNumber': _accountNumberController.text.trim(),
-            'ifscCode': _ifscController.text.trim(),
+            'bankDetails': {
+              'holderName': _holderNameController.text.trim(),
+              'accountNumber': _accountNumberController.text.trim(),
+              'ifscCode': _ifscController.text.trim().toUpperCase(),
+              'bankName': finalBankName,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
           });
+
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Bank Details Saved')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Bank details saved successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error saving details: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -74,150 +122,221 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text(
           "Bank Details",
-          style: TextStyle(
-            color: kMainText,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFF9FAFB),
+        backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: kMainText),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue.withOpacity(0.1)),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Payout Information",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_outline, color: Colors.blue, size: 20),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      "Your bank details are securely stored and only used for payouts.",
-                      style: TextStyle(color: Colors.blue, fontSize: 13),
+              const SizedBox(height: 8),
+              const Text(
+                "Enter your bank account details to receive earnings.",
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+
+              // 1. Bank Name Autocomplete
+              const Text(
+                "Bank Name",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold, // Bold
+                  fontSize: 14,
+                  color: Colors.black, // Proper Black
+                ),
+              ),
+              const SizedBox(height: 8),
+              Autocomplete<String>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text == '') {
+                    return const Iterable<String>.empty();
+                  }
+                  return _bankOptions.where((String option) {
+                    return option.toLowerCase().contains(
+                      textEditingValue.text.toLowerCase(),
+                    );
+                  });
+                },
+                onSelected: (String selection) {
+                  _bankNameController.text = selection;
+                },
+                fieldViewBuilder:
+                    (
+                      context,
+                      textEditingController,
+                      focusNode,
+                      onFieldSubmitted,
+                    ) {
+                      if (_bankNameController.text.isNotEmpty &&
+                          textEditingController.text.isEmpty) {
+                        textEditingController.text = _bankNameController.text;
+                      }
+
+                      return TextFormField(
+                        controller: textEditingController,
+                        focusNode: focusNode,
+                        onChanged: (val) => _bankNameController.text = val,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: "Search bank (e.g. HDFC)",
+                          prefixIcon: const Icon(
+                            Icons.account_balance,
+                            color: Colors.grey,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                        validator: (val) =>
+                            val!.isEmpty ? "Bank Name is required" : null,
+                      );
+                    },
+              ),
+              const SizedBox(height: 20),
+
+              // 2. Account Holder Name
+              _buildTextField(
+                controller: _holderNameController,
+                label: "Account Holder Name",
+                hint: "Name as per passbook",
+                icon: Icons.person,
+              ),
+              const SizedBox(height: 20),
+
+              // 3. Account Number
+              _buildTextField(
+                controller: _accountNumberController,
+                label: "Account Number",
+                hint: "Enter account number",
+                icon: Icons.numbers,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 20),
+
+              // 4. IFSC Code
+              _buildTextField(
+                controller: _ifscController,
+                label: "IFSC Code",
+                hint: "e.g. SBIN0001234",
+                icon: Icons.qr_code,
+                isCapitalized: true,
+              ),
+
+              const SizedBox(height: 40),
+
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _saveDetails,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                ],
-              ),
-            ),
-            _buildProfessionalField(
-              "Bank Name",
-              _bankNameController,
-              Icons.account_balance,
-            ),
-            const SizedBox(height: 20),
-            _buildProfessionalField(
-              "Account Number",
-              _accountNumberController,
-              Icons.numbers,
-              isNumber: true,
-            ),
-            const SizedBox(height: 20),
-            _buildProfessionalField(
-              "IFSC / Routing Code",
-              _ifscController,
-              Icons.code,
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saveBankDetails,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor:
-                      kMainText, // Using Main theme color instead of generic green
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Save Bank Details",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        "Save Bank Details",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildProfessionalField(
-    String label,
-    TextEditingController ctrl,
-    IconData icon, {
-    bool isNumber = false,
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool isCapitalized = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5),
-        ],
-      ),
-      child: TextFormField(
-        controller: ctrl,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        // RULE: Input text is Darker and Bolder
-        style: const TextStyle(
-          color: kMainText,
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-        ),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: kSecondaryText),
-          prefixIcon: Icon(icon, color: kSecondaryText, size: 20),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: kBorderColor),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: kBorderColor),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: kMainText),
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 16,
-            horizontal: 16,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold, // Bold
+            fontSize: 14,
+            color: Colors.black, // Proper Black
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w500,
+          ), // Input Text Color
+          textCapitalization: isCapitalized
+              ? TextCapitalization.characters
+              : TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            prefixIcon: Icon(icon, color: Colors.grey),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.blue, width: 2),
+            ),
+          ),
+          validator: (val) => val!.isEmpty ? "$label is required" : null,
+        ),
+      ],
     );
   }
 }

@@ -7,6 +7,7 @@ import '../../auth/screens/agent_login_screen.dart';
 import 'edit_profile_screen.dart';
 import 'verification_screen.dart';
 import 'bank_details_screen.dart';
+import 'my_reviews_screen.dart'; // Added Import
 
 class AgentProfileScreen extends StatelessWidget {
   const AgentProfileScreen({super.key});
@@ -153,7 +154,6 @@ class AgentProfileScreen extends StatelessWidget {
                                 name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                // UPDATED: Darker, bolder text for Name
                                 style: theme.textTheme.headlineSmall?.copyWith(
                                   fontWeight: FontWeight.w800,
                                   color: kMainText,
@@ -173,7 +173,6 @@ class AgentProfileScreen extends StatelessWidget {
                         // Role (Line 1)
                         Text(
                           category,
-                          // UPDATED: Darker text for Main Category
                           style: const TextStyle(
                             color: kMainText,
                             fontSize: 15,
@@ -184,7 +183,6 @@ class AgentProfileScreen extends StatelessWidget {
                         // Email (Line 2)
                         Text(
                           email,
-                          // UPDATED: Secondary text is lighter
                           style: const TextStyle(
                             color: kSecondaryText,
                             fontSize: 13,
@@ -224,7 +222,7 @@ class AgentProfileScreen extends StatelessWidget {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
-                                color: kMainText, // UPDATED
+                                color: kMainText,
                               ),
                             ),
                             Text(
@@ -251,10 +249,10 @@ class AgentProfileScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         if (completion < 1.0)
-                          Text(
+                          const Text(
                             "Complete your profile to get verified faster.",
                             style: TextStyle(
-                              color: kSecondaryText, // UPDATED
+                              color: kSecondaryText,
                               fontSize: 11,
                             ),
                           )
@@ -319,7 +317,7 @@ class AgentProfileScreen extends StatelessWidget {
                 ),
               ),
 
-              // --- 4. MENU OPTIONS (CONNECTED) ---
+              // --- 4. MENU OPTIONS ---
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -378,6 +376,21 @@ class AgentProfileScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const BankDetailsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      // -- My Reviews (NEW ADDITION) --
+                      _buildMenuTile(
+                        icon: Icons.star_outline,
+                        title: "My Reviews",
+                        subtitle: "See customer feedback",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MyReviewsScreen(),
                             ),
                           );
                         },
@@ -453,7 +466,6 @@ class AgentProfileScreen extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          // UPDATED: Main Stat Value is Dark & Bold
           style: const TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 16,
@@ -462,7 +474,6 @@ class AgentProfileScreen extends StatelessWidget {
         ),
         Text(
           label,
-          // UPDATED: Label is lighter
           style: const TextStyle(
             color: kSecondaryText,
             fontSize: 12,
@@ -484,7 +495,6 @@ class AgentProfileScreen extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Text(
           title.toUpperCase(),
-          // UPDATED: Section Title is Lighter but uppercase/bold
           style: const TextStyle(
             color: kSecondaryText,
             fontSize: 12,
@@ -518,11 +528,10 @@ class AgentProfileScreen extends StatelessWidget {
             color: Colors.grey[50],
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: kMainText, size: 20), // Icon dark
+          child: Icon(icon, color: kMainText, size: 20),
         ),
         title: Text(
           title,
-          // UPDATED: Menu Title is Dark & SemiBold
           style: const TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 15,
@@ -532,7 +541,6 @@ class AgentProfileScreen extends StatelessWidget {
         subtitle: subtitle != null
             ? Text(
                 subtitle,
-                // UPDATED: Subtitle is Lighter
                 style: const TextStyle(color: kSecondaryText, fontSize: 12),
               )
             : null,

@@ -139,47 +139,68 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   }
 
   // --- 4. UPDATE STATUS (With OTP Generation) ---
-  Future<void> _updateStatus(String newStatus) async {
+  Future<void> _updateStatus(String newStatus, {double? quotePrice}) async {
     setState(() => _isLoading = true);
     try {
-      Map<String, dynamic> updateData = {
-        'status': newStatus,
-        'agentId': _currentUid,
-      };
-
-      if (newStatus == 'accepted') {
-        updateData['acceptedAt'] = FieldValue.serverTimestamp();
-
-        // --- GENERATE OTP HERE ---
-        final random = Random();
-        final otp = (1000 + random.nextInt(9000)).toString();
-        updateData['completionOtp'] = otp;
-        // -------------------------
-
-        // Fetch Agent Details to save in Job Document (for User App to see)
-        final agentDoc = await FirebaseFirestore.instance
-            .collection('agents')
-            .doc(_currentUid)
-            .get();
-
-        if (agentDoc.exists) {
-          final agentData = agentDoc.data()!;
-          updateData['agentName'] = agentData['name'] ?? 'Service Partner';
-          updateData['agentPhone'] = agentData['phone'] ?? '';
-          updateData['agentRating'] = agentData['rating'] ?? 0.0;
-        }
-      } else if (newStatus == 'completed') {
-        updateData['completedAt'] = FieldValue.serverTimestamp();
-      }
-
-      await FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('serviceRequests')
-          .doc(widget.jobId)
-          .update(updateData);
+          .doc(widget.jobId);
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        DocumentSnapshot snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) throw Exception("Job does not exist!");
+
+        String currentStatus = snapshot.get('status');
+
+        // Race condition check
+        if (newStatus == 'accepted' &&
+            currentStatus != 'pending' &&
+            currentStatus != 'pending_quote') {
+          throw Exception("Job is already taken.");
+        }
+
+        Map<String, dynamic> updateData = {
+          'status': newStatus == 'accepted' && quotePrice != null
+              ? 'pending_approval'
+              : newStatus,
+          'agentId': _currentUid,
+        };
+
+        if (newStatus == 'accepted') {
+          // If Quoting
+          if (quotePrice != null) {
+            updateData['price'] = quotePrice;
+            updateData['quotedAt'] = FieldValue.serverTimestamp();
+            updateData['status'] = 'pending_approval';
+          } else {
+            // Direct Accept
+            updateData['acceptedAt'] = FieldValue.serverTimestamp();
+            // Generate OTP
+            final random = Random();
+            final otp = (1000 + random.nextInt(9000)).toString();
+            updateData['completionOtp'] = otp;
+          }
+
+          // Add Agent Info (Best effort inside transaction or fetch before)
+          // Ideally fetch before transaction to keep it fast, but acceptable for MVP
+          DocumentSnapshot agentSnap = await transaction.get(
+            FirebaseFirestore.instance.collection('agents').doc(_currentUid),
+          );
+          if (agentSnap.exists) {
+            updateData['agentName'] = agentSnap.get('name');
+            updateData['agentPhone'] = agentSnap.get('phone');
+            updateData['agentRating'] = agentSnap.get('rating');
+          }
+        } else if (newStatus == 'completed') {
+          updateData['completedAt'] = FieldValue.serverTimestamp();
+        }
+
+        transaction.update(docRef, updateData);
+      });
 
       if (mounted) {
         String msg = newStatus == 'accepted'
-            ? "Job Accepted!"
+            ? (quotePrice != null ? "Quote Sent!" : "Job Accepted!")
             : "Job Completed!";
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: Colors.green),
@@ -197,6 +218,115 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     }
   }
 
+  // --- 5. CANCEL JOB ---
+  Future<void> _cancelJob() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Cancel Job?"),
+        content: const Text(
+          "This will remove you from this job and send it back to the marketplace for other agents. Are you sure?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("No"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              "Yes, Cancel",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('serviceRequests')
+          .doc(widget.jobId)
+          .update({
+            'status': 'pending', // Reset status
+            'agentId': FieldValue.delete(), // Remove Agent ID
+            'agentName': FieldValue.delete(),
+            'agentPhone': FieldValue.delete(),
+            'agentRating': FieldValue.delete(),
+            'acceptedAt': FieldValue.delete(),
+            'completionOtp': FieldValue.delete(), // Clear OTP
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Job Cancelled. It is now open for others."),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- 6. QUOTE DIALOG ---
+  Future<void> _showQuoteDialog() async {
+    final priceController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Submit Quote"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("The user requested an estimate. Enter your price:"),
+            const SizedBox(height: 16),
+            TextField(
+              controller: priceController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "Amount (₹)",
+                prefixText: "₹ ",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final price = double.tryParse(priceController.text.trim());
+              if (price != null && price > 0) {
+                Navigator.pop(ctx);
+                _updateStatus('accepted', quotePrice: price);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Enter a valid amount")),
+                );
+              }
+            },
+            child: const Text("Send Quote"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -211,11 +341,12 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     final String status = data['status'] ?? 'pending';
     final String? customerPhone = data['customerPhone'];
 
-    // Location & Schedule
+    // Get Location & Schedule & OTP
     final GeoPoint? location = data['location'];
     final Timestamp? scheduledTs = data['scheduledTime'];
-    // OTP (Will be null if pending, present if accepted)
     final String otp = data['completionOtp'] ?? '0000';
+    // --- NEW: Image URL ---
+    final String? imageUrl = data['imageUrl'];
 
     String scheduledStr = "ASAP";
     if (scheduledTs != null) {
@@ -244,6 +375,54 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- 1. JOB PHOTO (NEW) ---
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: InteractiveViewer(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(imageUrl),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 200,
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: DecorationImage(
+                      image: NetworkImage(imageUrl),
+                      fit: BoxFit.cover,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.black26, // Dark overlay for icon visibility
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.zoom_in, color: Colors.white, size: 40),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
             // SCHEDULE BANNER
             Container(
               width: double.infinity,
@@ -310,7 +489,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "₹ ${price.toStringAsFixed(0)}",
+                    price > 0 ? "₹ ${price.toStringAsFixed(0)}" : "Needs Quote",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -353,6 +532,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -429,12 +609,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       if (status == 'accepted')
                         IconButton(
                           onPressed: () => _makePhoneCall(customerPhone),
-                          icon: Icon(
-                            Icons.phone,
-                            color: customerPhone != null
-                                ? Colors.green
-                                : Colors.grey,
-                          ),
+                          icon: const Icon(Icons.phone, color: Colors.green),
                           style: IconButton.styleFrom(
                             backgroundColor:
                                 (customerPhone != null
@@ -457,21 +632,76 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         ),
       ),
 
-      // ACTION BUTTON
+      // ACTION BUTTONS (Stacked)
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: _buildActionButton(status, otp),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // Wrap content height
+          children: [
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: _buildActionButton(status, price, otp),
+            ),
+            // --- CANCEL BUTTON (Visible only if Accepted) ---
+            if (status == 'accepted') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: _isLoading ? null : _cancelJob,
+                  icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                  label: const Text(
+                    "Cancel Job",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: Colors.red.withOpacity(0.05),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildActionButton(String status, String otp) {
-    if (status == 'pending') {
+  // --- WIDGETS ---
+  Widget _buildActionButton(String status, double price, String otp) {
+    // 1. Quote
+    if (status == 'pending_quote' || (status == 'pending' && price == 0)) {
+      return ElevatedButton(
+        onPressed: _isLoading ? null : _showQuoteDialog,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blueAccent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 4,
+        ),
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text(
+                "QUOTE PRICE",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+      );
+    }
+    // 2. Accept
+    else if (status == 'pending') {
       return ElevatedButton(
         onPressed: _isLoading ? null : () => _updateStatus('accepted'),
         style: ElevatedButton.styleFrom(
@@ -492,9 +722,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 ),
               ),
       );
-    } else if (status == 'accepted') {
+    }
+    // 3. Complete
+    else if (status == 'accepted') {
       return ElevatedButton(
-        // Calls OTP Dialog
         onPressed: _isLoading ? null : () => _showOtpDialog(otp),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.blue,
@@ -513,6 +744,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   color: Colors.white,
                 ),
               ),
+      );
+    } else if (status == 'pending_approval') {
+      return Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Text(
+          "WAITING FOR USER APPROVAL",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+        ),
       );
     } else {
       return Container(

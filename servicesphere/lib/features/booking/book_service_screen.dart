@@ -1,9 +1,12 @@
+import 'dart:io'; // Required for File
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // Required for Upload
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geocoding/geocoding.dart'; // REQUIRED: flutter pub add geocoding
+import 'package:geocoding/geocoding.dart';
+import 'package:image_picker/image_picker.dart'; // Required for Image
 import 'package:servicesphere/features/booking/location_picker_screen.dart';
 
 class BookServiceScreen extends StatefulWidget {
@@ -22,7 +25,6 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _addressController = TextEditingController();
-  final _priceController = TextEditingController();
   final _phoneController = TextEditingController();
 
   // Scheduling Variables
@@ -31,6 +33,9 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
   // Location Variable
   GeoPoint? _selectedGeoPoint;
+
+  // Image Variable
+  XFile? _selectedImage;
 
   bool _isLoading = false;
 
@@ -53,47 +58,61 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     };
   }
 
-  // --- UPDATED: Pick Location & Get Address Name ---
+  // --- 1. PICK IMAGE ---
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take a Picture'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final XFile? image =
+                    await picker.pickImage(source: ImageSource.camera);
+                if (image != null) setState(() => _selectedImage = image);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final XFile? image =
+                    await picker.pickImage(source: ImageSource.gallery);
+                if (image != null) setState(() => _selectedImage = image);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickLocationOnMap() async {
-    // 1. Navigate to map
     final result = await Navigator.push(context,
         MaterialPageRoute(builder: (context) => const LocationPickerScreen()));
 
-    // 2. If user picked a spot
     if (result != null && result is LatLng) {
-      setState(() => _isLoading = true); // Show loading while fetching address
-
+      setState(() => _isLoading = true);
       try {
         _selectedGeoPoint = GeoPoint(result.latitude, result.longitude);
-
-        // 3. Reverse Geocoding (Coords -> Address)
         List<Placemark> placemarks =
             await placemarkFromCoordinates(result.latitude, result.longitude);
-
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
-          // Construct a readable string
-          // Example: "Taj Mahal, Dharmapuri, Forest Colony, Agra"
           String formattedAddress =
               "${place.name}, ${place.subLocality}, ${place.locality}";
-
-          // Remove empty parts if any (e.g. if name is missing)
           formattedAddress = formattedAddress.replaceAll(RegExp(r'^, | ,'), '');
-
           _addressController.text = formattedAddress;
         } else {
-          _addressController.text =
-              "Pinned Location (${result.latitude.toStringAsFixed(4)}, ${result.longitude.toStringAsFixed(4)})";
+          _addressController.text = "Pinned Location";
         }
       } catch (e) {
-        // Fallback if geocoding fails
-        _addressController.text =
-            "Pinned Location (${result.latitude.toStringAsFixed(4)}, ${result.longitude.toStringAsFixed(4)})";
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text("Could not fetch address name, but location is saved.")),
-        );
+        _addressController.text = "Pinned Location";
       } finally {
         setState(() => _isLoading = false);
       }
@@ -121,7 +140,6 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
   Future<void> _postJob() async {
     if (!_formKey.currentState!.validate()) return;
-
     if (_selectedDate == null || _selectedTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please select a Date and Time.")),
@@ -139,6 +157,18 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
         return;
       }
 
+      // --- 2. UPLOAD IMAGE TO FIREBASE STORAGE ---
+      String? imageUrl;
+      if (_selectedImage != null) {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('job_images')
+            .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        await storageRef.putFile(File(_selectedImage!.path));
+        imageUrl = await storageRef.getDownloadURL();
+      }
+
       final scheduledDateTime = DateTime(
         _selectedDate!.year,
         _selectedDate!.month,
@@ -147,25 +177,29 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
         _selectedTime!.minute,
       );
 
+      // --- 3. SAVE TO FIRESTORE ---
       await FirebaseFirestore.instance.collection('serviceRequests').add({
         'title': _titleController.text.trim(),
         'description': _descController.text.trim(),
         'address': _addressController.text.trim(),
-        'price': double.tryParse(_priceController.text) ?? 0.0,
+        // 'price' is 0 because Agent will Quote
+        'price': 0.0,
         'customerPhone': _phoneController.text.trim(),
         'category': widget.categoryName,
-        'status': 'pending',
+        // Status is 'pending_quote' so Agent App shows "Quote Price" button
+        'status': 'pending_quote',
         'customerId': user.uid,
         'customerName': user.displayName ?? 'Valued Customer',
         'createdAt': FieldValue.serverTimestamp(),
         'scheduledTime': Timestamp.fromDate(scheduledDateTime),
         'location': _selectedGeoPoint,
+        'imageUrl': imageUrl, // Save image link
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text("Job Scheduled Successfully!"),
+              content: Text("Request Sent! Waiting for Agent Quotes."),
               backgroundColor: Colors.green),
         );
         Navigator.pop(context);
@@ -219,10 +253,44 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                             color: Colors.black87)),
                     const SizedBox(height: 8),
                     Text(
-                        "We need a few details to connect you with the right professional.",
+                        "Describe the issue. Agents will review and send a price quote.",
                         style: theme.textTheme.bodyMedium
                             ?.copyWith(color: Colors.grey[600])),
                     const SizedBox(height: 32),
+
+                    // --- 4. IMAGE PICKER UI ---
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade300),
+                          image: _selectedImage != null
+                              ? DecorationImage(
+                                  image: FileImage(File(_selectedImage!.path)),
+                                  fit: BoxFit.cover)
+                              : null,
+                        ),
+                        child: _selectedImage == null
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_a_photo,
+                                      size: 40, color: theme.primaryColor),
+                                  const SizedBox(height: 8),
+                                  const Text("Add Photo (Optional)",
+                                      style: TextStyle(
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.bold)),
+                                ],
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
                     _buildTextField(
                         context: context,
@@ -275,7 +343,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // --- ADDRESS FIELD WITH MAP ICON ---
+                    // Address
                     _buildTextField(
                       context: context,
                       controller: _addressController,
@@ -291,25 +359,24 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    // Phone Number
                     _buildTextField(
-                        context: context,
-                        controller: _phoneController,
-                        label: "Phone Number",
-                        hint: "10-digit mobile number",
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                        validator: (v) =>
-                            v!.length < 10 ? "Invalid Number" : null),
-                    const SizedBox(height: 20),
-                    _buildTextField(
-                        context: context,
-                        controller: _priceController,
-                        label: "Budget",
-                        hint: "0.00",
-                        icon: Icons.currency_rupee,
-                        keyboardType: TextInputType.number,
-                        validator: (v) => v!.isEmpty ? "Required" : null,
-                        prefixText: "₹ "),
+                      context: context,
+                      controller: _phoneController,
+                      label: "Phone Number",
+                      hint: "10-digit mobile number",
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return "Required";
+                        if (v.length != 10) return "Must be 10 digits";
+                        return null;
+                      },
+                    ),
+
+                    // --- REMOVED BUDGET FIELD (Agent will quote) ---
+
                     const SizedBox(height: 40),
 
                     SizedBox(
@@ -325,7 +392,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                         child: _isLoading
                             ? const CircularProgressIndicator(
                                 color: Colors.white)
-                            : const Text("Schedule Job",
+                            : const Text("Request Quote",
                                 style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -343,6 +410,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     );
   }
 
+  // --- Helper Widgets ---
   Widget _buildPickerContainer(BuildContext context,
       {required IconData icon, required String label, required String value}) {
     return Container(
@@ -388,6 +456,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     String? Function(String?)? validator,
     String? prefixText,
     Widget? suffixIcon,
+    int? maxLength,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,6 +472,10 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
           maxLines: maxLines,
           keyboardType: keyboardType,
           validator: validator,
+          maxLength: maxLength,
+          buildCounter: (context,
+                  {required currentLength, required isFocused, maxLength}) =>
+              null,
           style: const TextStyle(color: Colors.black87),
           decoration: InputDecoration(
             filled: true,

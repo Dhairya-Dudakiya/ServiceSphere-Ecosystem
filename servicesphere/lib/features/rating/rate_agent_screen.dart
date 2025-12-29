@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart'; // Run: flutter pub add flutter_rating_bar
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 
 class RateAgentScreen extends StatefulWidget {
   final String jobId;
@@ -24,6 +24,13 @@ class _RateAgentScreenState extends State<RateAgentScreen> {
   bool _isLoading = false;
 
   Future<void> _submitRating() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a star rating")),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -41,7 +48,6 @@ class _RateAgentScreenState extends State<RateAgentScreen> {
         int ratingCount = (data['ratingCount'] ?? 0) as int;
 
         // Calculate New Average
-        // Formula: ((OldRating * OldCount) + NewRating) / (OldCount + 1)
         double newRating =
             ((currentRating * ratingCount) + _rating) / (ratingCount + 1);
 
@@ -52,7 +58,7 @@ class _RateAgentScreenState extends State<RateAgentScreen> {
         });
       });
 
-      // 2. Mark the Job as Rated so the button disappears
+      // 2. Mark the Job as Rated
       await firestore.collection('serviceRequests').doc(widget.jobId).update({
         'isRated': true,
         'userRating': _rating,
@@ -69,9 +75,11 @@ class _RateAgentScreenState extends State<RateAgentScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -79,18 +87,21 @@ class _RateAgentScreenState extends State<RateAgentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Force light theme colors for consistency on this specific modal-like screen
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA), // Light Grey Background
       appBar: AppBar(
         title: const Text(
           "Rate Service",
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
+          icon: const Icon(Icons.close, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -99,75 +110,134 @@ class _RateAgentScreenState extends State<RateAgentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const CircleAvatar(
-              radius: 40,
-              backgroundColor: Color(0xFFF0F4FF),
-              child: Icon(Icons.person, size: 40, color: Color(0xFF2F5C8A)),
+            const SizedBox(height: 20),
+
+            // --- AGENT AVATAR ---
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border:
+                    Border.all(color: primaryColor.withOpacity(0.2), width: 3),
+              ),
+              child: CircleAvatar(
+                radius: 40,
+                backgroundColor: primaryColor.withOpacity(0.1),
+                child: Text(
+                  widget.agentName.isNotEmpty
+                      ? widget.agentName[0].toUpperCase()
+                      : 'A',
+                  style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 24),
+
             Text(
               "How was ${widget.agentName}?",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 8),
             const Text(
-              "Your feedback helps us improve.",
-              style: TextStyle(color: Colors.grey),
+              "Your feedback helps us improve our service quality.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
-            const SizedBox(height: 32),
 
-            // Rating Bar (Star Input)
+            const SizedBox(height: 40),
+
+            // --- RATING BAR ---
             RatingBar.builder(
               initialRating: 5,
               minRating: 1,
               direction: Axis.horizontal,
               allowHalfRating: true,
               itemCount: 5,
-              itemPadding: const EdgeInsets.symmetric(horizontal: 4.0),
-              itemBuilder: (context, _) =>
-                  const Icon(Icons.star, color: Colors.amber),
+              itemPadding: const EdgeInsets.symmetric(horizontal: 8.0),
+              itemSize: 40,
+              itemBuilder: (context, _) => const Icon(
+                Icons.star_rounded,
+                color: Colors.amber,
+              ),
               onRatingUpdate: (rating) {
                 setState(() => _rating = rating);
               },
             ),
-            const SizedBox(height: 32),
 
-            // Review Text Field
+            const SizedBox(height: 10),
+            Text(
+              "$_rating / 5.0",
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber),
+            ),
+
+            const SizedBox(height: 40),
+
+            // --- REVIEW INPUT ---
             TextField(
               controller: _reviewController,
               maxLines: 4,
+              style: const TextStyle(color: Colors.black87),
               decoration: InputDecoration(
-                hintText: "Write a review (optional)...",
+                hintText: "Write your review here (optional)...",
+                hintStyle: const TextStyle(color: Colors.grey),
                 filled: true,
-                fillColor: const Color(0xFFF8F9FA),
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.all(16),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: primaryColor, width: 2),
                 ),
               ),
             ),
+
             const SizedBox(height: 32),
 
-            // Submit Button
+            // --- SUBMIT BUTTON ---
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _submitRating,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
+                  backgroundColor: primaryColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
+                  elevation: 4,
+                  disabledBackgroundColor: primaryColor.withOpacity(0.6),
                 ),
                 child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
                     : const Text(
                         "Submit Review",
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
               ),
