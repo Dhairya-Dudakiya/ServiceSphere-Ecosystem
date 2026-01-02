@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:servicesphere/features/auth/services/auth_services.dart';
-import 'package:servicesphere/features/profile/screens/edit_profile_screen.dart';
 import 'package:servicesphere/features/profile/services/profile_service.dart';
+
+// --- SCREENS IMPORTS ---
+import 'package:servicesphere/features/profile/screens/edit_profile_screen.dart';
+import 'package:servicesphere/features/profile/screens/manage_addresses_screen.dart';
+import 'package:servicesphere/features/profile/screens/payment_methods_screen.dart';
+import 'package:servicesphere/features/profile/screens/help_support_screen.dart';
+import 'package:servicesphere/features/notification/notification_screen.dart';
+import 'package:servicesphere/features/auth/screens/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,6 +22,82 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileService _profileService = ProfileService();
   final AuthService _authService = AuthService();
+  bool _isLoading = false;
+
+  // --- DELETE ACCOUNT LOGIC ---
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Account?"),
+        content: const Text(
+            "This is permanent. Your data and bookings will be wiped. Are you sure?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete Forever",
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // 1. Delete User Data from Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
+
+        // 2. Delete Authentication Account
+        await user.delete();
+
+        // App will auto-navigate to Login because of AuthGate stream,
+        // but we force navigation just in case.
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      // Security Check: If login is too old, ask them to re-login
+      if (e.code == 'requires-recent-login') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    "Security: Please Log Out and Log In again to delete account.")),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("Error: $e")));
+        }
+      }
+    } catch (e) {
+      // Handle generic errors
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,16 +115,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (snapshot.hasError) {
             return const Center(child: Text('Error loading profile.'));
           }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('Could not find user data.'));
-          }
 
-          final userData = snapshot.data!.data()!;
-          final String displayName = userData['displayName'] ?? 'User';
-          final String email = userData['email'] ?? 'No Email';
+          final userData = snapshot.data?.data();
+          final String displayName = userData?['displayName'] ?? 'User';
+          final String email = userData?['email'] ?? 'No Email';
 
           // Use Firestore photo if available, otherwise fallback to Google Auth photo
-          String photoUrl = userData['photoUrl'] ?? '';
+          String photoUrl = userData?['photoUrl'] ?? '';
           if (photoUrl.isEmpty) {
             photoUrl = FirebaseAuth.instance.currentUser?.photoURL ?? '';
           }
@@ -64,14 +144,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         // Avatar with Edit Icon
                         GestureDetector(
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => EditProfileScreen(
-                                  currentUserData: userData,
+                            if (userData != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => EditProfileScreen(
+                                    currentUserData: userData,
+                                  ),
                                 ),
-                              ),
-                            );
+                              );
+                            }
                           },
                           child: Stack(
                             children: [
@@ -174,14 +256,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               title: 'Edit Profile',
                               icon: Icons.person_outline,
                               onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => EditProfileScreen(
-                                      currentUserData: userData,
+                                if (userData != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => EditProfileScreen(
+                                        currentUserData: userData,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
                               },
                             ),
                             _buildDivider(),
@@ -189,7 +273,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               title: 'Manage Addresses',
                               icon: Icons.location_on_outlined,
                               onTap: () {
-                                // TODO: Navigate to ManageAddressesScreen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ManageAddressesScreen()),
+                                );
                               },
                             ),
                             _buildDivider(),
@@ -197,7 +286,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               title: 'Payment Methods',
                               icon: Icons.payment_outlined,
                               onTap: () {
-                                // TODO: Navigate to PaymentMethodsScreen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          const PaymentMethodsScreen()),
+                                );
                               },
                             ),
                           ],
@@ -224,14 +318,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ProfileMenuItem(
                               title: 'Notifications',
                               icon: Icons.notifications_none_rounded,
-                              onTap: () {},
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          const NotificationsScreen()),
+                                );
+                              },
                             ),
                             _buildDivider(),
                             ProfileMenuItem(
                               title: 'Help & Support',
                               icon: Icons.help_outline,
                               onTap: () {
-                                // TODO: Navigate to HelpScreen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          const HelpSupportScreen()),
+                                );
                               },
                             ),
                           ],
@@ -260,11 +366,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           iconColor: Colors.red,
                           onTap: () {
                             _authService.signOut();
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst);
+                            // Navigate to Login Screen and remove all previous routes
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginScreen()),
+                              (route) => false,
+                            );
                           },
                         ),
                       ),
+
+                      const SizedBox(height: 20),
+
+                      // --- DELETE BUTTON (Added Here) ---
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _deleteAccount,
+                            icon: const Icon(Icons.delete_forever,
+                                color: Colors.red),
+                            label: const Text("Delete Account",
+                                style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold)),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 12),
+                            ),
+                          ),
+                        ),
+
                       const SizedBox(height: 40),
                     ],
                   ),

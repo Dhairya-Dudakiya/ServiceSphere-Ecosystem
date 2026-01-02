@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fl_chart/fl_chart.dart'; // REQUIRED: flutter pub add fl_chart
+import 'package:fl_chart/fl_chart.dart';
 import '../../auth/screens/admin_login_screen.dart';
-
-// --- FEATURE SCREENS IMPORTS ---
 import '../../agents/screens/agent_verification_screen.dart';
 import '../../job/screens/all_jobs_screen.dart';
 import '../../categories/screens/categories_screen.dart';

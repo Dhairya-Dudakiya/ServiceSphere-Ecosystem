@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-
-// --- NAVIGATION IMPORTS ---
 import 'package:servicesphereagent/features/jobs/screens/job_details_screen.dart';
 import 'package:servicesphereagent/features/jobs/screens/my_active_jobs_screen.dart';
 import 'package:servicesphereagent/features/jobs/screens/my_completed_jobs_screen.dart';
 import 'package:servicesphereagent/features/jobs/screens/job_feed_screen.dart';
 import 'package:servicesphereagent/features/profile/screens/agent_profile_screen.dart';
-// --- NEW IMPORT FOR WALLET ---
 import 'package:servicesphereagent/features/wallet/screens/wallet_screen.dart';
 
 class AgentHomeScreen extends StatefulWidget {
@@ -21,7 +18,22 @@ class AgentHomeScreen extends StatefulWidget {
 
 class _AgentHomeScreenState extends State<AgentHomeScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
-  int _selectedIndex = 0;
+  int _selectedIndex = 0; // Tracks the current tab
+
+  // --- TOGGLE ONLINE STATUS ---
+  Future<void> _toggleOnlineStatus(bool currentValue) async {
+    if (_user == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('agents')
+          .doc(_user!.uid)
+          .update({'isOnline': !currentValue});
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +48,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
       // --- 1. BODY SWITCHER ---
       body: _buildBody(theme, displayName, photoUrl),
 
-      // --- 2. BOTTOM NAVIGATION BAR (MATCHES EARNINGS COLOR) ---
+      // --- 2. BOTTOM NAVIGATION BAR ---
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -54,7 +66,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
               _selectedIndex = index;
             });
           },
-          backgroundColor: theme.primaryColor, // Matches Earnings Card
+          backgroundColor: theme.primaryColor,
           indicatorColor: Colors.white,
           surfaceTintColor: Colors.transparent,
           elevation: 10,
@@ -94,111 +106,143 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     }
   }
 
-  // --- 4. THE DASHBOARD VIEW ---
+  // --- 4. THE DASHBOARD VIEW (With Online Switch) ---
   Widget _buildDashboardView(
     ThemeData theme,
     String displayName,
     String photoUrl,
   ) {
-    return CustomScrollView(
-      slivers: [
-        // --- APP BAR ---
-        SliverAppBar(
-          expandedHeight: 80.0,
-          floating: true,
-          pinned: true,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          automaticallyImplyLeading: false,
-          title: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: theme.primaryColor.withOpacity(0.1),
-                backgroundImage: photoUrl.isNotEmpty
-                    ? NetworkImage(photoUrl)
-                    : null,
-                child: photoUrl.isEmpty
-                    ? Icon(Icons.person, color: theme.primaryColor)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    // Wrap the whole dashboard in a StreamBuilder to listen for 'isOnline' status
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('agents')
+          .doc(_user!.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        bool isOnline = false;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          isOnline = data['isOnline'] ?? false;
+        }
+
+        return CustomScrollView(
+          slivers: [
+            // --- APP BAR ---
+            SliverAppBar(
+              expandedHeight: 80.0,
+              floating: true,
+              pinned: true,
+              elevation: 0,
+              backgroundColor: Colors.white,
+              automaticallyImplyLeading: false,
+              title: Row(
                 children: [
-                  Text(
-                    'Hello, $displayName',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: theme.primaryColor.withOpacity(0.1),
+                    backgroundImage: photoUrl.isNotEmpty
+                        ? NetworkImage(photoUrl)
+                        : null,
+                    child: photoUrl.isEmpty
+                        ? Icon(Icons.person, color: theme.primaryColor)
+                        : null,
                   ),
-                  Text(
-                    'Online & Ready',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Hello, $displayName',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      // Dynamic Status Text
+                      Text(
+                        isOnline ? 'Online & Ready' : 'Offline',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isOnline ? Colors.green : Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Notifications coming soon!")),
-                );
-              },
-              icon: const Icon(
-                Icons.notifications_outlined,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
-
-        // --- STATS GRID ---
-        SliverPadding(
-          padding: const EdgeInsets.all(16),
-          sliver: SliverToBoxAdapter(child: _buildRealTimeStats(context)),
-        ),
-
-        // --- HEADER ---
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "New Opportunities",
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                    fontSize: 18,
+              actions: [
+                // --- ONLINE TOGGLE SWITCH ---
+                Transform.scale(
+                  scale: 0.8,
+                  child: Switch(
+                    value: isOnline,
+                    activeColor: Colors.green,
+                    inactiveThumbColor: Colors.grey,
+                    inactiveTrackColor: Colors.grey.shade200,
+                    onChanged: (val) => _toggleOnlineStatus(isOnline),
                   ),
                 ),
-                TextButton(
+                IconButton(
                   onPressed: () {
-                    setState(() => _selectedIndex = 1);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Notifications coming soon!"),
+                      ),
+                    );
                   },
-                  child: const Text("See All"),
+                  icon: const Icon(
+                    Icons.notifications_outlined,
+                    color: Colors.black87,
+                  ),
                 ),
               ],
             ),
-          ),
-        ),
 
-        // --- JOB LIST ---
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          sliver: _buildMarketplaceList(context),
-        ),
+            // --- STATS GRID ---
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverToBoxAdapter(child: _buildRealTimeStats(context)),
+            ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-      ],
+            // --- HEADER ---
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "New Opportunities",
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _selectedIndex = 1);
+                      },
+                      child: const Text("See All"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // --- JOB LIST ---
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: _buildMarketplaceList(context),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          ],
+        );
+      },
     );
   }
 
@@ -244,7 +288,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
 
             return Column(
               children: [
-                // --- 1. EARNINGS CARD (Now Clickable!) ---
+                // Earnings Card (Clickable)
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -319,12 +363,11 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // --- 2. STATS ROW ---
+                // Equal Sized Stats
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ACTIVE -> Navigates to MyActiveJobsScreen
                       Expanded(
                         child: GestureDetector(
                           onTap: () {
@@ -345,8 +388,6 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-
-                      // DONE -> Navigates to MyCompletedJobsScreen
                       Expanded(
                         child: GestureDetector(
                           onTap: () {
@@ -367,8 +408,6 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-
-                      // RATING -> Navigates to MyReviewsScreen
                       Expanded(
                         child: _buildStatCard(
                           label: "Rating",
@@ -393,7 +432,6 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     required String value,
     required IconData icon,
     required Color color,
-    VoidCallback? onTap,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
@@ -503,6 +541,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
   }
 }
 
+// --- REUSABLE JOB CARD ---
 class JobCardWidget extends StatelessWidget {
   final Map<String, dynamic> jobData;
   final VoidCallback onTap;

@@ -37,7 +37,10 @@ class AllAgentsScreen extends StatelessWidget {
               itemCount: docs.length,
               itemBuilder: (context, index) {
                 final data = docs[index].data() as Map<String, dynamic>;
-                return _AgentDetailCard(data: data);
+                return _AgentDetailCard(
+                  data: data,
+                  uid: docs[index].id,
+                ); // Pass UID
               },
             );
           },
@@ -47,22 +50,111 @@ class AllAgentsScreen extends StatelessWidget {
   }
 }
 
-class _AgentDetailCard extends StatelessWidget {
+class _AgentDetailCard extends StatefulWidget {
   final Map<String, dynamic> data;
+  final String uid; // We need UID to update the wallet
 
-  const _AgentDetailCard({required this.data});
+  const _AgentDetailCard({required this.data, required this.uid});
+
+  @override
+  State<_AgentDetailCard> createState() => _AgentDetailCardState();
+}
+
+class _AgentDetailCardState extends State<_AgentDetailCard> {
+  // --- ADMIN RECHARGE LOGIC ---
+  Future<void> _showRechargeDialog() async {
+    final amountController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Add Wallet Credit"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Enter amount received from agent (Cash/UPI)."),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "Amount",
+                prefixText: "₹ ",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final amount = double.tryParse(amountController.text);
+              if (amount != null && amount > 0) {
+                Navigator.pop(ctx);
+                await _processRecharge(amount);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Add Credit"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _processRecharge(double amount) async {
+    try {
+      // 1. Update Balance
+      await FirebaseFirestore.instance
+          .collection('agents')
+          .doc(widget.uid)
+          .update({'walletBalance': FieldValue.increment(amount)});
+
+      // 2. Log Transaction (So agent sees it in their history)
+      await FirebaseFirestore.instance.collection('walletTransactions').add({
+        'agentId': widget.uid,
+        'amount': amount,
+        'type': 'credit',
+        'description': 'Admin Recharge (Cash)',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("₹${amount.toInt()} added to wallet!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final String name = data['name'] ?? 'Unknown';
-    final String email = data['email'] ?? 'No Email';
-    final String phone = data['phone'] ?? 'No Phone';
-    final String category = data['category'] ?? 'Unassigned';
-    final bool isVerified = data['isVerified'] ?? false;
-    final Map<String, dynamic> bankDetails = data['bankDetails'] ?? {};
+    final String name = widget.data['name'] ?? 'Unknown';
+    final String email = widget.data['email'] ?? 'No Email';
+    final String phone = widget.data['phone'] ?? 'No Phone';
+    final String category = widget.data['category'] ?? 'Unassigned';
+    final bool isVerified = widget.data['isVerified'] ?? false;
+    final double walletBalance = (widget.data['walletBalance'] ?? 0).toDouble();
+
+    // Bank Data
+    final Map<String, dynamic> bankDetails = widget.data['bankDetails'] ?? {};
     final String bankName = bankDetails['bankName'] ?? 'Not Added';
-    final String accountNum = bankDetails['accountNumber'] ?? '---';
-    final String ifsc = bankDetails['ifscCode'] ?? '---';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -82,10 +174,36 @@ class _AgentDetailCard extends StatelessWidget {
           ),
         ),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(category),
-        trailing: Icon(
-          isVerified ? Icons.verified : Icons.warning,
-          color: isVerified ? Colors.blue : Colors.orange,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(category),
+            // Show Wallet Balance here
+            Text(
+              "Balance: ₹${walletBalance.toStringAsFixed(0)}",
+              style: TextStyle(
+                color: walletBalance < 0 ? Colors.red : Colors.green,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // --- RECHARGE BUTTON ---
+            IconButton(
+              icon: const Icon(Icons.add_card, color: Colors.blue),
+              tooltip: "Add Credit",
+              onPressed: _showRechargeDialog,
+            ),
+            Icon(
+              isVerified ? Icons.verified : Icons.warning,
+              color: isVerified ? Colors.blue : Colors.orange,
+              size: 20,
+            ),
+          ],
         ),
         children: [
           Padding(
@@ -116,10 +234,7 @@ class _AgentDetailCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 _buildInfoRow(Icons.account_balance, bankName),
-                const SizedBox(height: 8),
-                _buildInfoRow(Icons.numbers, "Acc: $accountNum"),
-                const SizedBox(height: 8),
-                _buildInfoRow(Icons.qr_code, "IFSC: $ifsc"),
+                // Add more bank details if needed
               ],
             ),
           ),

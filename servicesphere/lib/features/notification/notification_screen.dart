@@ -6,9 +6,6 @@ import 'package:intl/intl.dart';
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  // --- FIX 1: HIDE instead of DELETE ---
-  // We update the document so it stays in the database (for the Agent)
-  // but disappears from your list.
   Future<void> _dismissNotification(String docId) async {
     await FirebaseFirestore.instance
         .collection('serviceRequests')
@@ -16,7 +13,6 @@ class NotificationsScreen extends StatelessWidget {
         .update({'isHiddenFromUser': true});
   }
 
-  // --- FIX 2: CLEAR ALL (Hide All) ---
   Future<void> _clearAll(BuildContext context, String userId) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -41,12 +37,15 @@ class NotificationsScreen extends StatelessWidget {
       final snapshot = await FirebaseFirestore.instance
           .collection('serviceRequests')
           .where('customerId', isEqualTo: userId)
-          .where('status',
-              whereIn: ['accepted', 'in_progress', 'completed']).get();
+          .where('status', whereIn: [
+        'accepted',
+        'in_progress',
+        'completed',
+        'pending_approval'
+      ]).get();
 
       final batch = FirebaseFirestore.instance.batch();
       for (var doc in snapshot.docs) {
-        // Set hidden flag for all
         batch.update(doc.reference, {'isHiddenFromUser': true});
       }
       await batch.commit();
@@ -86,18 +85,18 @@ class NotificationsScreen extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('serviceRequests')
                   .where('customerId', isEqualTo: user.uid)
+                  // --- 1. ADDED 'pending_approval' HERE ---
                   .where('status', whereIn: [
                 'accepted',
                 'in_progress',
-                'completed'
+                'completed',
+                'pending_approval'
               ]).snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                // --- FIX 3: CLIENT-SIDE FILTER ---
-                // We filter out items that are marked as hidden
                 final allDocs = snapshot.data?.docs ?? [];
                 final docs = allDocs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
@@ -122,7 +121,6 @@ class NotificationsScreen extends StatelessWidget {
                   );
                 }
 
-                // Sort by time
                 docs.sort((a, b) {
                   Timestamp tA = (a.data() as Map)['acceptedAt'] ??
                       (a.data() as Map)['createdAt'];
@@ -142,7 +140,6 @@ class NotificationsScreen extends StatelessWidget {
                     return Dismissible(
                       key: Key(doc.id),
                       direction: DismissDirection.horizontal,
-                      // Red Background (Delete style)
                       background: Container(
                         decoration: BoxDecoration(
                           color: Colors.red.shade400,
@@ -161,8 +158,6 @@ class NotificationsScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(right: 20),
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-
-                      // Trigger Hide Logic
                       onDismissed: (direction) {
                         _dismissNotification(doc.id);
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -202,10 +197,15 @@ class _NotificationTile extends StatelessWidget {
     IconData iconData;
     String message;
 
+    // --- 2. UPDATED TILE LOGIC ---
     if (status == 'completed') {
       iconColor = Colors.green;
       iconData = Icons.check_circle;
       message = "Your job '$title' has been completed!";
+    } else if (status == 'pending_approval') {
+      iconColor = Colors.purple;
+      iconData = Icons.attach_money;
+      message = "New Quote! Agent offered a price for '$title'.";
     } else {
       iconColor = Colors.blue;
       iconData = Icons.person_pin_circle;

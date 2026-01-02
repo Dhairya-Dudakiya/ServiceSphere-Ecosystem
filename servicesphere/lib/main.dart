@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:servicesphere/core/services/notification_service.dart';
 import 'package:servicesphere/features/splash/splash_screen.dart';
 import 'firebase_options.dart';
 
@@ -24,6 +25,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await NotificationService().initNotifications();
   runApp(const MyApp());
 }
 
