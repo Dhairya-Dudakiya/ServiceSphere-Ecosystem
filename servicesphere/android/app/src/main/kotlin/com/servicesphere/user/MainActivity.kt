@@ -1,4 +1,4 @@
-package com.example.servicesphere
+package com.servicesphere.user
 
 import io.flutter.embedding.android.FlutterActivity
 

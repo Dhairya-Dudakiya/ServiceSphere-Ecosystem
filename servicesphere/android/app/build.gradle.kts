@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.servicesphere"
+    namespace = "com.servicesphere.user"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -27,7 +27,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.servicesphere"
+        applicationId = "com.servicesphere.user"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
