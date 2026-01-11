@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For numeric keyboard
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../dashboard/agent_dashboard_screen.dart';
+// --- IMPORT AUTH GATE ---
+import 'package:servicesphereagent/auth_gate.dart';
 
 class AgentSignupScreen extends StatefulWidget {
   const AgentSignupScreen({super.key});
@@ -13,6 +14,7 @@ class AgentSignupScreen extends StatefulWidget {
 
 class _AgentSignupScreenState extends State<AgentSignupScreen> {
   bool _isLoading = false;
+  // 1. NEW: Toggle Password Visibility
   bool _isObscure = true;
   final _formKey = GlobalKey<FormState>();
 
@@ -40,6 +42,9 @@ class _AgentSignupScreenState extends State<AgentSignupScreen> {
   ];
 
   Future<void> _signUp() async {
+    // 2. NEW: Dismiss Keyboard
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
     // Custom Check for Category
@@ -75,9 +80,10 @@ class _AgentSignupScreenState extends State<AgentSignupScreen> {
       });
 
       if (mounted) {
-        // Success: Go to Dashboard
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AgentDashboardScreen()),
+        // 3. FIX: Navigate to AuthGate (Handles session & routing)
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AgentAuthGate()),
           (route) => false,
         );
       }
@@ -217,13 +223,14 @@ class _AgentSignupScreenState extends State<AgentSignupScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // --- Password ---
+                  // --- Password (With Eye Icon) ---
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _isObscure,
                     decoration: InputDecoration(
                       labelText: 'Password',
                       prefixIcon: const Icon(Icons.lock_outline),
+                      // 4. NEW: Eye Button
                       suffixIcon: IconButton(
                         icon: Icon(
                           _isObscure ? Icons.visibility_off : Icons.visibility,
@@ -239,12 +246,25 @@ class _AgentSignupScreenState extends State<AgentSignupScreen> {
                   const SizedBox(height: 24),
 
                   // --- Sign Up Button ---
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                          onPressed: _signUp,
-                          child: const Text('Register as Partner'),
-                        ),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _signUp,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              'Register as Partner',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
                   // --- Login Navigation ---

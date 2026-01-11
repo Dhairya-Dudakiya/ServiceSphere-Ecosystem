@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // REQUIRED FOR WELCOME MSG
 
 // --- FEATURE IMPORTS ---
 import 'package:servicesphere/features/profile/screens/profile_screen.dart';
@@ -13,6 +14,8 @@ import 'package:servicesphere/features/home/screens/all_categories_screen.dart';
 import 'package:servicesphere/features/booking/book_service_screen.dart';
 import 'package:servicesphere/features/notification/notification_screen.dart';
 import 'package:servicesphere/features/rating/rate_agent_screen.dart';
+import 'package:servicesphere/features/chat/chat_screen.dart';
+import 'package:servicesphere/core/services/notification_service.dart'; // REQUIRED
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,7 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
   final List<ServiceCategory> homeCategories = getHomeScreenCategories();
 
-  // Search variables
   final TextEditingController _searchController = TextEditingController();
   List<ServiceCategory> _filteredCategories = [];
   String _searchQuery = "";
@@ -38,6 +40,37 @@ class _HomeScreenState extends State<HomeScreen> {
     _filteredCategories = homeCategories;
     _searchController.addListener(_onSearchChanged);
     _listenForJobUpdates();
+    _checkAndShowWelcome(); // CHECK FOR NEW USER
+  }
+
+  // --- WELCOME NOTIFICATION LOGIC ---
+  Future<void> _checkAndShowWelcome() async {
+    if (_user?.metadata.creationTime == null) return;
+
+    // Check if account was created in the last 30 seconds
+    final creationTime = _user!.metadata.creationTime!;
+    final now = DateTime.now();
+    final difference = now.difference(creationTime).inSeconds;
+
+    // If fresh signup (less than 60s ago), show welcome
+    if (difference < 60) {
+      // Small delay to let UI settle
+      await Future.delayed(const Duration(seconds: 2));
+
+      try {
+        await NotificationService().showLocalNotification(
+          const RemoteMessage(
+            notification: RemoteNotification(
+              title: "Welcome to Service Sphere! 🚀",
+              body:
+                  "Thanks for joining! Book your first service today and get premium support. 🛠️✨",
+            ),
+          ),
+        );
+      } catch (e) {
+        debugPrint("Welcome notification error: $e");
+      }
+    }
   }
 
   @override
@@ -48,7 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --- SEARCH LOGIC ---
   void _onSearchChanged() {
     final query = _searchController.text.toLowerCase();
     setState(() {
@@ -63,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- REAL-TIME ALERTS ---
   void _listenForJobUpdates() {
     if (_user == null) return;
 
@@ -77,9 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final data = change.doc.data() as Map<String, dynamic>;
           final status = data['status'];
           final title = data['title'] ?? 'Service';
-          final agentName = data['agentName'] ?? 'A professional';
 
-          // Alert for Accepted Job
           if (status == 'accepted' && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -96,7 +125,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           }
-          // Alert for New Quote
           if (status == 'pending_approval' && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -147,10 +175,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const ProfileScreen()),
-                    );
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ProfileScreen()));
                   },
                   child: CircleAvatar(
                     radius: 22,
@@ -163,10 +190,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? displayName[0].toUpperCase()
                                 : 'U',
                             style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold))
                         : null,
                   ),
                 ),
@@ -174,34 +199,68 @@ class _HomeScreenState extends State<HomeScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      getGreeting(),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      displayName,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                        fontSize: 18,
-                      ),
-                    ),
+                    Text(getGreeting(),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey[600], fontSize: 12)),
+                    Text(displayName,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                            fontSize: 18)),
                   ],
                 ),
               ],
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none_rounded,
-                    color: Colors.black87),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const NotificationsScreen()),
+              // --- NOTIFICATION BELL WITH BADGE ---
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('serviceRequests')
+                    .where('customerId', isEqualTo: _user?.uid)
+                    .where('status', whereIn: [
+                  'accepted',
+                  'in_progress',
+                  'completed',
+                  'pending_approval'
+                ]).snapshots(),
+                builder: (context, snapshot) {
+                  bool hasNotifications = false;
+                  if (snapshot.hasData) {
+                    // Check if any visible notifications exist
+                    hasNotifications = snapshot.data!.docs.any((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return data['isHiddenFromUser'] != true;
+                    });
+                  }
+
+                  return Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_none_rounded,
+                            color: Colors.black87),
+                        onPressed: () {
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) =>
+                                      const NotificationsScreen()));
+                        },
+                      ),
+                      if (hasNotifications)
+                        Positioned(
+                          right: 12,
+                          top: 12,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -217,7 +276,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- 3. PROMO BANNER ---
           if (_searchQuery.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -226,7 +284,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // --- 4. CATEGORIES HEADER ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
@@ -238,7 +295,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- 5. CATEGORIES GRID ---
           if (_filteredCategories.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -268,7 +324,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // --- 6. BOOKINGS HEADER ---
           if (_searchQuery.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -277,7 +332,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // --- 7. REAL-TIME BOOKINGS LIST ---
           if (_searchQuery.isEmpty)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -288,11 +342,9 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  );
+                      child: Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: Center(child: CircularProgressIndicator())));
                 }
 
                 final docs = snapshot.data?.docs ?? [];
@@ -329,7 +381,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- HELPER WIDGETS ---
   Widget _buildSearchBar(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -337,10 +388,9 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
         ],
       ),
       child: TextField(
@@ -355,8 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () {
                     _searchController.clear();
                     FocusScope.of(context).unfocus();
-                  },
-                )
+                  })
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
@@ -371,17 +420,15 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [theme.primaryColor, theme.primaryColor.withOpacity(0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+            colors: [theme.primaryColor, theme.primaryColor.withOpacity(0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: theme.primaryColor.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
+              color: theme.primaryColor.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 5))
         ],
       ),
       child: const Column(
@@ -407,11 +454,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-    );
+    return Text(title,
+        style: const TextStyle(
+            fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87));
   }
 
   Widget _buildEmptyStateCard(BuildContext context, String text) {
@@ -483,23 +528,21 @@ class ServiceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            category.name,
-            style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(category.name,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );
   }
 }
 
-// --- BOOKING CARD (With Red Cancel, Quote Logic & OTP) ---
+// --- BOOKING CARD WITH ACTION BUTTONS ---
 class BookingCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String jobId;
@@ -517,7 +560,47 @@ class BookingCard extends StatelessWidget {
     }
   }
 
-  // --- 1. CANCEL LOGIC ---
+  Future<void> _acceptQuote(BuildContext context) async {
+    try {
+      final random = Random();
+      final otp = (1000 + random.nextInt(9000)).toString();
+
+      await FirebaseFirestore.instance
+          .collection('serviceRequests')
+          .doc(jobId)
+          .update({
+        'status': 'accepted',
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'completionOtp': otp,
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Quote Accepted!"), backgroundColor: Colors.green));
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  Future<void> _rejectQuote(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('serviceRequests')
+          .doc(jobId)
+          .update({
+        'status': 'pending_quote',
+        'price': 0.0,
+        'agentId': FieldValue.delete(),
+        'agentName': FieldValue.delete(),
+        'agentRating': FieldValue.delete(),
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Quote Rejected.")));
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
   Future<void> _cancelJob(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -548,52 +631,6 @@ class BookingCard extends StatelessWidget {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Error: $e")));
       }
-    }
-  }
-
-  // --- 2. ACCEPT QUOTE (WITH OTP) ---
-  Future<void> _acceptQuote(BuildContext context) async {
-    try {
-      final random = Random();
-      final otp = (1000 + random.nextInt(9000)).toString();
-
-      await FirebaseFirestore.instance
-          .collection('serviceRequests')
-          .doc(jobId)
-          .update({
-        'status': 'accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'completionOtp': otp,
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Quote Accepted!"), backgroundColor: Colors.green),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
-    }
-  }
-
-  // --- 3. REJECT QUOTE ---
-  Future<void> _rejectQuote(BuildContext context) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('serviceRequests')
-          .doc(jobId)
-          .update({
-        'status': 'pending_quote',
-        'price': 0.0,
-        'agentId': FieldValue.delete(),
-        'agentName': FieldValue.delete(),
-        'agentRating': FieldValue.delete(),
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Quote Rejected.")),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
@@ -629,23 +666,20 @@ class BookingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
         ],
       ),
       child: Column(
         children: [
-          // Row 1: Basic Info
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.work_outline,
                     color: Theme.of(context).primaryColor),
               ),
@@ -654,12 +688,11 @@ class BookingCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- DARKER TITLE ---
                     Text(title,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w900, // EXTRA BOLD
+                            fontWeight: FontWeight.w900,
                             fontSize: 16,
-                            color: Colors.black)), // PURE BLACK
+                            color: Colors.black)),
                     const SizedBox(height: 4),
                     Text(dateStr,
                         style:
@@ -677,12 +710,11 @@ class BookingCard extends StatelessWidget {
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8)),
                     child: Text(
-                      status.toString().toUpperCase().replaceAll('_', ' '),
-                      style: TextStyle(
-                          color: statusColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold),
-                    ),
+                        status.toString().toUpperCase().replaceAll('_', ' '),
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 8),
                   if (status == 'pending_approval')
@@ -702,8 +734,6 @@ class BookingCard extends StatelessWidget {
               ),
             ],
           ),
-
-          // --- RED CANCEL BUTTON (Only if Pending) ---
           if (status == 'pending' || status == 'pending_quote') ...[
             const SizedBox(height: 12),
             const Divider(),
@@ -711,7 +741,7 @@ class BookingCard extends StatelessWidget {
               width: double.infinity,
               child: TextButton.icon(
                 onPressed: () => _cancelJob(context),
-                icon: const Icon(Icons.cancel_outlined,
+                icon: const Icon(Icons.delete_outline,
                     size: 18, color: Colors.red),
                 label: const Text("Cancel Request",
                     style: TextStyle(
@@ -726,26 +756,21 @@ class BookingCard extends StatelessWidget {
               ),
             ),
           ],
-
-          // --- QUOTE APPROVAL SECTION ---
           if (status == 'pending_approval') ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.purple.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.purple.withOpacity(0.2)),
-              ),
+                  color: Colors.purple.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.purple.withOpacity(0.2))),
               child: Column(
                 children: [
-                  Text(
-                    "Agent offered: ₹${price.toStringAsFixed(0)}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.purple),
-                  ),
+                  Text("Agent offered: ₹${price.toStringAsFixed(0)}",
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.purple)),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -753,9 +778,8 @@ class BookingCard extends StatelessWidget {
                         child: OutlinedButton(
                           onPressed: () => _rejectQuote(context),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red),
-                          ),
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red)),
                           child: const Text("Reject"),
                         ),
                       ),
@@ -764,9 +788,8 @@ class BookingCard extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: () => _acceptQuote(context),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white),
                           child: const Text("Accept"),
                         ),
                       ),
@@ -776,18 +799,15 @@ class BookingCard extends StatelessWidget {
               ),
             ),
           ],
-
-          // --- OTP DISPLAY ---
           if (status == 'accepted' && completionOtp != null) ...[
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withOpacity(0.3))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -807,8 +827,6 @@ class BookingCard extends StatelessWidget {
               ),
             ),
           ],
-
-          // Agent Info & Actions
           if ((status == 'accepted' || status == 'completed') &&
               agentName != null) ...[
             const SizedBox(height: 12),
@@ -830,7 +848,9 @@ class BookingCard extends StatelessWidget {
                     children: [
                       Text(agentName,
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13)),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.black87)),
                       Row(
                         children: [
                           const Icon(Icons.star, size: 12, color: Colors.amber),
@@ -842,39 +862,45 @@ class BookingCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (status == 'accepted' && agentPhone != null)
-                  IconButton(
+                if (status == 'accepted') ...[
+                  // CALL BUTTON (Green Background)
+                  IconButton.filled(
                     onPressed: () => _callAgent(context, agentPhone),
-                    icon: const Icon(Icons.phone, color: Colors.green),
-                    constraints: const BoxConstraints(),
-                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.phone, color: Colors.white),
+                    style: IconButton.styleFrom(backgroundColor: Colors.green),
                   ),
-
-                // Rate Button
+                  const SizedBox(width: 8),
+                  // CHAT BUTTON (Blue Background)
+                  IconButton.filled(
+                    onPressed: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                  jobId: jobId, otherUserName: agentName)));
+                    },
+                    icon: const Icon(Icons.chat_bubble, color: Colors.white),
+                    style: IconButton.styleFrom(backgroundColor: Colors.blue),
+                  ),
+                ],
                 if (status == 'completed' && !isRated)
                   TextButton.icon(
                     onPressed: () {
                       Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => RateAgentScreen(
-                            jobId: jobId,
-                            agentId: agentId ?? '',
-                            agentName: agentName,
-                          ),
-                        ),
-                      );
+                          context,
+                          MaterialPageRoute(
+                              builder: (c) => RateAgentScreen(
+                                  jobId: jobId,
+                                  agentId: agentId ?? '',
+                                  agentName: agentName)));
                     },
                     icon: const Icon(Icons.star_outline,
                         size: 18, color: Colors.amber),
                     label: const Text("Rate"),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      visualDensity: VisualDensity.compact,
-                    ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        visualDensity: VisualDensity.compact),
                   ),
-
-                // Rated Badge
                 if (status == 'completed' && isRated)
                   const Text("You rated this",
                       style: TextStyle(

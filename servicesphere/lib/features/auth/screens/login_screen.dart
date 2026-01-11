@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:servicesphere/features/auth/screens/signup_screen.dart';
 import 'package:servicesphere/features/auth/services/auth_services.dart';
+// --- IMPORT AUTH GATE ---
+import 'package:servicesphere/auth_gate.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,7 +13,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
-  // 1. NEW: Variable to toggle password visibility
   bool _isObscure = true;
 
   final _formKey = GlobalKey<FormState>();
@@ -21,33 +22,30 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   Future<void> _login() async {
-    // 2. NEW: Close keyboard when button is pressed
-    FocusScope.of(context).unfocus();
+    FocusScope.of(context).unfocus(); // Close keyboard
 
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       await _authService.signInWithEmail(
-        email: _emailController.text
-            .trim(), // Added trim() to remove accidental spaces
+        email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      // No navigation needed here if you are using AuthGate (StreamBuilder) in main.dart
-      // The stream will detect the login and switch pages automatically.
+
+      // --- FIX: MANUALLY NAVIGATE ON SUCCESS ---
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const AuthGate()),
+          (route) => false, // Remove all previous routes
+        );
+      }
     } catch (e) {
-      if (mounted) {
-        _showError(e.toString());
-      }
+      if (mounted) _showError(e.toString());
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -55,6 +53,15 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await _authService.signInWithGoogle();
+
+      // --- FIX: NAVIGATE ON GOOGLE SUCCESS ---
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const AuthGate()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (mounted) _showError("Failed to sign in: $e");
     } finally {
@@ -65,8 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _sendResetLink() async {
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
-      _showError('Please enter your email in the field to reset password.',
-          isError: false);
+      _showError('Please enter your email to reset password.', isError: false);
       return;
     }
     setState(() => _isLoading = true);
@@ -119,16 +125,14 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- Logo ---
                   Image.asset(
-                    'assets/images/logo.png', // 3. FIX: Standard path (removed 'lib/')
+                    'assets/images/logo.png',
                     height: 80,
                     color: logoColor,
                     errorBuilder: (context, error, stackTrace) =>
                         Icon(Icons.lock, size: 80, color: logoColor),
                   ),
                   const SizedBox(height: 16),
-
                   Text(
                     'Welcome Back!',
                     textAlign: TextAlign.center,
@@ -146,8 +150,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                   ),
                   const SizedBox(height: 32),
-
-                  // --- Email Field ---
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -160,15 +162,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         : null,
                   ),
                   const SizedBox(height: 16),
-
-                  // --- Password Field (UPDATED) ---
                   TextFormField(
                     controller: _passwordController,
-                    obscureText: _isObscure, // Uses the variable
+                    obscureText: _isObscure,
                     decoration: InputDecoration(
                       labelText: 'Password',
                       prefixIcon: const Icon(Icons.lock_outline),
-                      // 4. NEW: Eye Icon Button
                       suffixIcon: IconButton(
                         icon: Icon(_isObscure
                             ? Icons.visibility_off
@@ -184,8 +183,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? 'Password must be at least 6 characters'
                         : null,
                   ),
-
-                  // --- Forgot Password Button ---
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
@@ -194,10 +191,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // --- Login Button ---
                   SizedBox(
-                    height: 50, // Fixed height for professional look
+                    height: 50,
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _login,
                       child: _isLoading
@@ -210,10 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextStyle(fontSize: 16)),
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
-                  // --- Divider ---
                   Row(
                     children: [
                       const Expanded(child: Divider()),
@@ -228,12 +220,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // --- Google Button ---
                   OutlinedButton.icon(
                     onPressed: _isLoading ? null : _signInWithGoogle,
-                    icon: const Icon(Icons.g_mobiledata,
-                        size: 28), // Or custom asset
+                    icon: const Icon(Icons.g_mobiledata, size: 28),
                     label: const Text('Continue with Google'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -243,8 +232,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // --- Sign Up Navigation ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

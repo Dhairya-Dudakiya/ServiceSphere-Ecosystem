@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'agent_signup_screen.dart';
-import '../../dashboard/agent_dashboard_screen.dart';
+// --- IMPORT AUTH GATE ---
+import 'package:servicesphereagent/auth_gate.dart';
 
 class AgentLoginScreen extends StatefulWidget {
   const AgentLoginScreen({super.key});
@@ -19,6 +20,9 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
   final _passwordController = TextEditingController();
 
   Future<void> _login() async {
+    // 1. Close Keyboard
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -30,9 +34,11 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
       );
 
       if (mounted) {
-        // Navigate to Agent Dashboard
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AgentDashboardScreen()),
+        // 2. FIX: Clear Stack and Navigate to AuthGate
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AgentAuthGate()),
+          (route) => false, // Remove all previous routes
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -79,7 +85,7 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Dynamic Logo Tinting Logic (Same as User App)
+    // Dynamic Logo Tinting Logic
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final Color logoColor = isDarkMode
         ? Colors.white
@@ -173,12 +179,25 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
                   const SizedBox(height: 16),
 
                   // --- Login Button ---
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                          onPressed: _login,
-                          child: const Text('Log In'),
-                        ),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _login,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              'Log In',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // --- Divider ---

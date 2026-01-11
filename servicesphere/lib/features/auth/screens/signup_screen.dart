@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:servicesphere/features/auth/services/auth_services.dart';
+// --- IMPORT AUTH GATE ---
+import 'package:servicesphere/auth_gate.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -10,6 +12,9 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
+  // 1. NEW: Password Visibility Toggle
+  bool _isObscure = true;
+
   final _formKey = GlobalKey<FormState>();
   final _authService = AuthService();
 
@@ -18,20 +23,30 @@ class _SignupScreenState extends State<SignupScreen> {
   final _fullNameController = TextEditingController();
 
   Future<void> _signUp() async {
+    // 2. NEW: Dismiss Keyboard
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       await _authService.signUpWithEmail(
-        email: _emailController.text,
+        email: _emailController.text.trim(),
         password: _passwordController.text,
-        fullName: _fullNameController.text,
+        fullName: _fullNameController.text.trim(),
       );
+
       if (mounted) {
-        // Pop back to the login screen, AuthGate will handle the rest
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // 3. NEW LOGIC: Go DIRECTLY to Home (AuthGate handles the routing)
+        // This removes the Login screen from the back stack too.
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const AuthGate()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -58,21 +73,16 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // --- NEW: LOGIC TO SET LOGO COLOR ---
-    // Check if the current theme is dark
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    // Select the correct color to *tint* the logo
-    final Color logoColor = isDarkMode
-        ? Colors.white // In dark mode, tint the logo white
-        : Theme.of(context).colorScheme.primary; // In light mode, tint it blue
-    // --- END OF NEW LOGIC ---
+    final Color logoColor =
+        isDarkMode ? Colors.white : Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
-        // Adds a clean back button
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme:
+            IconThemeData(color: isDarkMode ? Colors.white : Colors.black),
       ),
       body: SafeArea(
         child: Center(
@@ -83,14 +93,16 @@ class _SignupScreenState extends State<SignupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- UPDATED: Logo is now tinted ---
+                  // --- Logo ---
                   Image.asset(
-                    'lib/assets/images/logo.png', // The single logo file
+                    'assets/images/logo.png', // Fixed Path
                     height: 80,
-                    color: logoColor, // Apply the dynamic color tint
+                    color: logoColor,
+                    errorBuilder: (context, error, stackTrace) =>
+                        Icon(Icons.person_add, size: 80, color: logoColor),
                   ),
                   const SizedBox(height: 16),
-                  // --- Title ---
+
                   Text(
                     'Create Your Account',
                     textAlign: TextAlign.center,
@@ -100,7 +112,6 @@ class _SignupScreenState extends State<SignupScreen> {
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  // --- Subtitle ---
                   Text(
                     'Sign up to get started',
                     textAlign: TextAlign.center,
@@ -109,7 +120,8 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                   ),
                   const SizedBox(height: 32),
-                  // --- Full Name Field ---
+
+                  // --- Full Name ---
                   TextFormField(
                     controller: _fullNameController,
                     decoration: const InputDecoration(
@@ -121,7 +133,8 @@ class _SignupScreenState extends State<SignupScreen> {
                         : null,
                   ),
                   const SizedBox(height: 16),
-                  // --- Email Field ---
+
+                  // --- Email ---
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -134,27 +147,50 @@ class _SignupScreenState extends State<SignupScreen> {
                         : null,
                   ),
                   const SizedBox(height: 16),
-                  // --- Password Field ---
+
+                  // --- Password ---
                   TextFormField(
                     controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
+                    obscureText: _isObscure,
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock_outline),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      // 4. NEW: Eye Icon
+                      suffixIcon: IconButton(
+                        icon: Icon(_isObscure
+                            ? Icons.visibility_off
+                            : Icons.visibility),
+                        onPressed: () {
+                          setState(() {
+                            _isObscure = !_isObscure;
+                          });
+                        },
+                      ),
                     ),
                     validator: (value) => value == null || value.length < 6
                         ? 'Password must be at least 6 characters'
                         : null,
                   ),
                   const SizedBox(height: 24),
+
                   // --- Sign Up Button ---
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                          onPressed: _signUp,
-                          child: const Text('Sign Up'),
-                        ),
+                  SizedBox(
+                    height: 50, // Fixed height matches Login
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _signUp,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text('Sign Up',
+                              style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+
                   const SizedBox(height: 16),
+
                   // --- Login Navigation ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

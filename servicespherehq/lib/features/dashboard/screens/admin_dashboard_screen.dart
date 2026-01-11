@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../auth/screens/admin_login_screen.dart';
+
+// --- FEATURE SCREENS IMPORTS ---
 import '../../agents/screens/agent_verification_screen.dart';
 import '../../job/screens/all_jobs_screen.dart';
 import '../../categories/screens/categories_screen.dart';
@@ -35,33 +37,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     setState(() {
       _selectedIndex = index;
     });
-    Navigator.pop(context);
+    Navigator.pop(context); // Close the drawer
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _key,
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF3F4F6), // Soft Grey Background
+      // --- APP BAR ---
       appBar: AppBar(
         title: const Text(
           "ServiceSphere HQ",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
         ),
         centerTitle: true,
         backgroundColor: Colors.black87,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
+
+      // --- DRAWER ---
       drawer: Drawer(
         backgroundColor: Colors.white,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
             UserAccountsDrawerHeader(
-              decoration: const BoxDecoration(color: Colors.black87),
+              decoration: const BoxDecoration(
+                color: Colors.black87,
+                image: DecorationImage(
+                  image: AssetImage(
+                    'assets/images/pattern.png',
+                  ), // Optional pattern if you have one
+                  fit: BoxFit.cover,
+                  opacity: 0.1,
+                ),
+              ),
               accountName: const Text(
-                "Admin",
+                "Super Admin",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -72,23 +90,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 "admin@servicesphere.com",
                 style: TextStyle(color: Colors.white70),
               ),
-              currentAccountPicture: const CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(
+              currentAccountPicture: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  color: Colors.white,
+                ),
+                child: const Icon(
                   Icons.admin_panel_settings,
                   size: 40,
-                  color: Colors.black87,
+                  color: Color(0xFF1E293B),
                 ),
               ),
             ),
+
             _buildDrawerItem(0, "Dashboard", Icons.dashboard_outlined),
             _buildDrawerItem(1, "Verifications", Icons.verified_user_outlined),
             _buildDrawerItem(2, "All Jobs", Icons.work_outline),
             _buildDrawerItem(3, "Categories", Icons.category_outlined),
-            const Divider(),
+
+            const Divider(height: 32),
+
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Logout', style: TextStyle(color: Colors.red)),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.logout, color: Colors.red, size: 20),
+              ),
+              title: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               onTap: _logout,
             ),
           ],
@@ -98,26 +136,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  // Helper for Drawer Items
   Widget _buildDrawerItem(int index, String title, IconData icon) {
     final isSelected = _selectedIndex == index;
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: isSelected ? Colors.black87 : Colors.grey[700],
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF1E293B).withOpacity(0.05) : null,
+        borderRadius: BorderRadius.circular(12),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: Colors.black87,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isSelected ? const Color(0xFF1E293B) : Colors.grey[600],
         ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: const Color(0xFF1E293B),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+        selected: isSelected,
+        onTap: () => _onItemTapped(index),
       ),
-      selected: isSelected,
-      selectedTileColor: Colors.black87.withOpacity(0.1),
-      onTap: () => _onItemTapped(index),
     );
   }
 
+  // --- SCREEN SWITCHER LOGIC ---
   Widget _getScreen(int index) {
     switch (index) {
       case 0:
@@ -141,25 +187,60 @@ class _DashboardHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Overview",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Welcome back, Admin. Live stats from your platform.",
-            style: TextStyle(color: Colors.grey[600]),
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Overview",
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  Text(
+                    "Live platform metrics",
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.circle, size: 8, color: Colors.green),
+                    SizedBox(width: 6),
+                    Text(
+                      "Live",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
+          // --- REAL-TIME DATA STREAMS ---
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('serviceRequests')
@@ -171,17 +252,22 @@ class _DashboardHome extends StatelessWidget {
                     .snapshots(),
                 builder: (context, agentSnapshot) {
                   if (!jobSnapshot.hasData || !agentSnapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
                   }
 
-                  // 1. CALCULATE BASIC STATS
+                  // 1. CALCULATE STATS
                   int activeJobs = 0;
                   int pendingAgents = 0;
                   double totalRevenue = 0.0;
                   int totalAgents = agentSnapshot.data!.docs.length;
 
-                  // Map to group revenue by date: "2023-12-25" -> 500.0
-                  Map<String, double> dailyRevenueMap = {};
+                  // For Chart
+                  List<Map<String, dynamic>> completedJobs = [];
 
                   for (var doc in jobSnapshot.data!.docs) {
                     final data = doc.data() as Map<String, dynamic>;
@@ -199,18 +285,11 @@ class _DashboardHome extends StatelessWidget {
                       double commission = price * 0.10;
                       totalRevenue += commission;
 
-                      // Process Chart Data
                       if (data['completedAt'] != null) {
-                        final date = (data['completedAt'] as Timestamp)
-                            .toDate();
-                        final dateKey = DateFormat('yyyy-MM-dd').format(date);
-
-                        if (dailyRevenueMap.containsKey(dateKey)) {
-                          dailyRevenueMap[dateKey] =
-                              dailyRevenueMap[dateKey]! + commission;
-                        } else {
-                          dailyRevenueMap[dateKey] = commission;
-                        }
+                        completedJobs.add({
+                          'date': (data['completedAt'] as Timestamp).toDate(),
+                          'revenue': commission,
+                        });
                       }
                     }
                   }
@@ -223,38 +302,32 @@ class _DashboardHome extends StatelessWidget {
                     }
                   }
 
-                  // 2. PREPARE CHART DATA
-                  // Convert Map to sorted List
-                  List<MapEntry<String, double>> sortedDaily =
-                      dailyRevenueMap.entries.toList()
-                        ..sort((a, b) => a.key.compareTo(b.key));
-
-                  List<FlSpot> spots = [];
-                  List<String> dateLabels = []; // Store date strings for X-axis
-
+                  // 2. CHART DATA PREP
+                  completedJobs.sort(
+                    (a, b) => (a['date'] as DateTime).compareTo(
+                      b['date'] as DateTime,
+                    ),
+                  );
+                  List<FlSpot> spots = [const FlSpot(0, 0)];
+                  List<String> dateLabels = [""];
                   double runningTotal = 0;
 
-                  // Add initial point
-                  spots.add(const FlSpot(0, 0));
-                  dateLabels.add(""); // Placeholder for 0
-
-                  for (int i = 0; i < sortedDaily.length; i++) {
-                    runningTotal += sortedDaily[i].value;
+                  for (int i = 0; i < completedJobs.length; i++) {
+                    runningTotal += (completedJobs[i]['revenue'] as double);
                     spots.add(FlSpot((i + 1).toDouble(), runningTotal));
-
-                    // Format date for label (e.g., "25 Dec")
-                    DateTime d = DateTime.parse(sortedDaily[i].key);
+                    DateTime d = completedJobs[i]['date'];
                     dateLabels.add(DateFormat('d MMM').format(d));
                   }
 
                   return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // --- STATS GRID ---
                       GridView.count(
                         crossAxisCount: 2,
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
+                        childAspectRatio:
+                            1.0, // FIX: Make cards square to prevent overflow
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         children: [
@@ -262,8 +335,7 @@ class _DashboardHome extends StatelessWidget {
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    const RevenueDetailsScreen(),
+                                builder: (_) => const RevenueDetailsScreen(),
                               ),
                             ),
                             child: _buildStatCard(
@@ -279,14 +351,14 @@ class _DashboardHome extends StatelessWidget {
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const ActiveJobsScreen(),
+                                builder: (_) => const ActiveJobsScreen(),
                               ),
                             ),
                             child: _buildStatCard(
                               title: "Active Jobs",
                               value: "$activeJobs",
                               icon: Icons.work_outline,
-                              color: Colors.black87,
+                              color: Colors.blue,
                               isClickable: true,
                             ),
                           ),
@@ -294,14 +366,13 @@ class _DashboardHome extends StatelessWidget {
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    const AgentVerificationScreen(),
+                                builder: (_) => const AgentVerificationScreen(),
                               ),
                             ),
                             child: _buildStatCard(
                               title: "Pending Agents",
                               value: "$pendingAgents",
-                              icon: Icons.person_add_alt_1,
+                              icon: Icons.verified_user,
                               color: Colors.orange,
                               isClickable: true,
                             ),
@@ -310,7 +381,7 @@ class _DashboardHome extends StatelessWidget {
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const AllAgentsScreen(),
+                                builder: (_) => const AllAgentsScreen(),
                               ),
                             ),
                             child: _buildStatCard(
@@ -324,107 +395,150 @@ class _DashboardHome extends StatelessWidget {
                         ],
                       ),
 
-                      const SizedBox(height: 30),
-                      const Text(
-                        "Revenue Growth",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
 
-                      // --- REVENUE CHART WITH DATES ---
+                      // --- CHART SECTION ---
                       Container(
-                        height: 300,
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(16, 24, 24, 10),
+                        padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
                             ),
                           ],
                         ),
-                        child: spots.length > 1
-                            ? LineChart(
-                                LineChartData(
-                                  gridData: const FlGridData(show: false),
-                                  titlesData: FlTitlesData(
-                                    topTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    rightTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (value, meta) {
-                                          int index = value.toInt();
-                                          if (index > 0 &&
-                                              index < dateLabels.length) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 8.0,
-                                              ),
-                                              child: Text(
-                                                dateLabels[index],
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const SizedBox();
-                                        },
-                                        interval: 1, // Show every date point
-                                      ),
-                                    ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Revenue Growth",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E293B),
                                   ),
-                                  borderData: FlBorderData(show: false),
-                                  lineBarsData: [
-                                    LineChartBarData(
-                                      spots: spots,
-                                      isCurved: true,
-                                      color: Colors.green,
-                                      barWidth: 4,
-                                      isStrokeCapRound: true,
-                                      dotData: const FlDotData(show: true),
-                                      belowBarData: BarAreaData(
-                                        show: true,
-                                        color: Colors.green.withOpacity(0.15),
+                                ),
+                                Icon(Icons.show_chart, color: Colors.green),
+                              ],
+                            ),
+                            const Divider(height: 30),
+                            SizedBox(
+                              height: 250,
+                              child: spots.length > 1
+                                  ? LineChart(
+                                      LineChartData(
+                                        gridData: FlGridData(
+                                          show: true,
+                                          drawVerticalLine: false,
+                                          getDrawingHorizontalLine: (value) =>
+                                              FlLine(
+                                                color: Colors.grey.shade100,
+                                                strokeWidth: 1,
+                                              ),
+                                        ),
+                                        titlesData: FlTitlesData(
+                                          topTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: false,
+                                            ),
+                                          ),
+                                          rightTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: false,
+                                            ),
+                                          ),
+                                          leftTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: false,
+                                            ),
+                                          ),
+                                          bottomTitles: AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: true,
+                                              getTitlesWidget: (value, meta) {
+                                                int index = value.toInt();
+                                                if (index > 0 &&
+                                                    index < dateLabels.length) {
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          top: 8.0,
+                                                        ),
+                                                    child: Text(
+                                                      dateLabels[index],
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors.grey[600],
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                return const SizedBox();
+                                              },
+                                              interval: 1,
+                                            ),
+                                          ),
+                                        ),
+                                        borderData: FlBorderData(show: false),
+                                        lineBarsData: [
+                                          LineChartBarData(
+                                            spots: spots,
+                                            isCurved: true,
+                                            color: Colors.green,
+                                            barWidth: 4,
+                                            isStrokeCapRound: true,
+                                            dotData: const FlDotData(
+                                              show: true,
+                                            ),
+                                            belowBarData: BarAreaData(
+                                              show: true,
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Colors.green.withOpacity(0.3),
+                                                  Colors.green.withOpacity(0.0),
+                                                ],
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.bar_chart_rounded,
+                                            size: 48,
+                                            color: Colors.grey[300],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            "Data will appear after first job",
+                                            style: TextStyle(
+                                              color: Colors.grey[400],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
-                                ),
-                              )
-                            : const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.show_chart,
-                                      size: 48,
-                                      color: Colors.grey,
-                                    ),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      "Chart will appear after first completed job",
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 50),
+                      const SizedBox(height: 40),
                     ],
                   );
                 },
@@ -447,55 +561,61 @@ class _DashboardHome extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: color.withOpacity(0.08),
+            blurRadius: 15,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.black87,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+      child: SingleChildScrollView(
+        // FIX: Prevent overflow
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
                 ),
-              ),
-              if (isClickable) ...[
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
+                if (isClickable)
+                  Icon(
+                    Icons.arrow_outward_rounded,
+                    size: 16,
+                    color: Colors.grey[400],
+                  ),
               ],
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF1E293B),
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

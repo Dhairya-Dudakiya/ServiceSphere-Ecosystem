@@ -10,22 +10,30 @@ class ActiveJobsScreen extends StatelessWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Force Cancel Job?"),
+        title: const Text(
+          "Force Cancel Job?",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: const Text(
           "This will immediately stop the job and update its status to 'cancelled'. "
-          "Both the User and Agent will see this change.",
+          "Both the User and Agent will see this change.\n\nThis action cannot be undone.",
         ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("No"),
+            child: const Text("Keep Job", style: TextStyle(color: Colors.grey)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              "Yes, Cancel",
-              style: TextStyle(color: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
+            child: const Text("Yes, Cancel"),
           ),
         ],
       ),
@@ -53,10 +61,11 @@ class ActiveJobsScreen extends StatelessWidget {
           );
         }
       } catch (e) {
+        debugPrint("Error cancelling job: $e"); // Debug print
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("Error: $e")));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          );
         }
       }
     }
@@ -65,14 +74,15 @@ class ActiveJobsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FC),
+      backgroundColor: const Color(0xFFF8F9FA), // Professional Light Grey
       appBar: AppBar(
         title: const Text(
           "Active Operations",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: Padding(
@@ -92,18 +102,34 @@ class ActiveJobsScreen extends StatelessWidget {
             }
 
             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Center(
+              return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 60,
-                      color: Colors.green,
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_outline,
+                        size: 60,
+                        color: Colors.green,
+                      ),
                     ),
-                    SizedBox(height: 16),
-                    Text(
-                      "No active jobs. Everything is quiet.",
+                    const SizedBox(height: 24),
+                    const Text(
+                      "All Quiet Here",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "No active jobs at the moment.",
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   ],
@@ -113,8 +139,9 @@ class ActiveJobsScreen extends StatelessWidget {
 
             final docs = snapshot.data!.docs;
 
-            return ListView.builder(
+            return ListView.separated(
               itemCount: docs.length,
+              separatorBuilder: (ctx, i) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final data = docs[index].data() as Map<String, dynamic>;
                 return _ActiveJobCard(
@@ -144,10 +171,9 @@ class _ActiveJobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String title = data['title'] ?? 'Service';
-    final String customerName = data['customerName'] ?? 'Unknown Customer';
+    final String title = data['title'] ?? 'Service Request';
+    final String customerName = data['customerName'] ?? 'Unknown';
     final String agentName = data['agentName'] ?? 'Unassigned';
-    final String agentPhone = data['agentPhone'] ?? 'N/A';
     final String status = data['status']?.toString().toUpperCase() ?? 'UNKNOWN';
     final double price = (data['price'] ?? 0).toDouble();
     final Timestamp? createdAt = data['createdAt'];
@@ -157,19 +183,39 @@ class _ActiveJobCard extends StatelessWidget {
       dateStr = DateFormat('MMM d, h:mm a').format(createdAt.toDate());
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header: Title & Status
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    Color statusColor = Colors.blue;
+    if (status == 'PENDING_APPROVAL') statusColor = Colors.purple;
+    if (status == 'IN_PROGRESS') statusColor = Colors.orange;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.work, color: Colors.blue),
+                ),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,16 +224,13 @@ class _ActiveJobCard extends StatelessWidget {
                         title,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: 16,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "Created: $dateStr",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
+                        "Posted: $dateStr",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                       ),
                     ],
                   ),
@@ -198,123 +241,118 @@ class _ActiveJobCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
                   ),
                   child: Text(
-                    status,
-                    style: const TextStyle(
-                      color: Colors.blue,
+                    status.replaceAll('_', ' '),
+                    style: TextStyle(
+                      color: statusColor,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 10,
                     ),
                   ),
                 ),
               ],
             ),
-            const Divider(height: 30),
+          ),
 
-            // Details Grid
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+          // Details Body
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Customer Column
-                Expanded(
-                  child: _buildInfoColumn(
-                    label: "Customer",
-                    value: customerName,
-                    icon: Icons.person_outline,
-                  ),
+                _buildCompactInfo(
+                  "Customer",
+                  customerName,
+                  Icons.person_outline,
+                  Colors.black87,
                 ),
-                // Agent Column
-                Expanded(
-                  child: _buildInfoColumn(
-                    label: "Agent",
-                    value: agentName,
-                    subValue: agentPhone,
-                    icon: Icons.engineering_outlined,
-                  ),
+                _buildCompactInfo(
+                  "Agent",
+                  agentName,
+                  Icons.engineering_outlined,
+                  Colors.black87,
                 ),
-                // Price Column
-                Expanded(
-                  child: _buildInfoColumn(
-                    label: "Price",
-                    value: "₹ $price",
-                    icon: Icons.attach_money,
-                    isPrice: true,
-                  ),
+                _buildCompactInfo(
+                  "Value",
+                  "₹ ${price.toStringAsFixed(0)}",
+                  Icons.attach_money,
+                  Colors.green[700]!,
                 ),
               ],
             ),
+          ),
 
-            const SizedBox(height: 20),
-
-            // Admin Actions
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onCancel,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade50,
-                  foregroundColor: Colors.red,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: Colors.red),
-                  ),
-                ),
-                icon: const Icon(Icons.warning_amber_rounded, size: 20),
-                label: const Text("FORCE CANCEL JOB (Admin Action)"),
+          // Action Footer
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.04),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(16),
               ),
             ),
-          ],
-        ),
+            child: TextButton.icon(
+              onPressed: onCancel,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+                padding: EdgeInsets.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.warning_amber_rounded, size: 18),
+              label: const Text(
+                "FORCE CANCEL JOB",
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInfoColumn({
-    required String label,
-    required String value,
-    String? subValue,
-    required IconData icon,
-    bool isPrice = false,
-  }) {
+  Widget _buildCompactInfo(
+    String label,
+    String value,
+    IconData icon,
+    Color valueColor,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, size: 14, color: Colors.grey),
+            Icon(icon, size: 14, color: Colors.grey[400]),
             const SizedBox(width: 4),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontWeight: FontWeight.bold,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: isPrice ? Colors.green[700] : Colors.black87,
+        const SizedBox(height: 4),
+        SizedBox(
+          width: 90, // Limit width to prevent overflow
+          child: Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: valueColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
-        if (subValue != null)
-          Text(
-            subValue,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
       ],
     );
   }
