@@ -60,16 +60,6 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-## 📸 Screenshots
-
-| User Home | Live Tracking | Agent Job Alert | Earnings |
-|:---:|:---:|:---:|:---:|
-| <img src="assets/screenshots/user_home.png" width="200"> | <img src="assets/screenshots/tracking.png" width="200"> | <img src="assets/screenshots/job_alert.png" width="200"> | <img src="assets/screenshots/earnings.png" width="200"> |
-
-*(Note: Add your actual screenshot images to an `assets/screenshots/` folder in your repo)*
-
----
-
 ## 📞 Contact
 
 If you have any questions or suggestions, feel free to reach out:
