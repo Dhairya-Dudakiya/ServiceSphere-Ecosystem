@@ -5,7 +5,7 @@
 ![Status](https://img.shields.io/badge/Status-Closed%20Testing%20(Alpha)-green)
 ![License](https://img.shields.io/badge/License-MIT-purple)
 
-**ServiceSphere** is a hyperlocal home services marketplace that bridges the gap between customers and local service professionals (Electricians, Plumbers, Cleaners) in real-time. Built with **Flutter** and **Firebase**, it features a decentralised "Uber-style" job dispatch system, ensuring instant connections and secure transactions.
+**ServiceSphere** is a hyperlocal home services marketplace that bridges the gap between customers and local service professionals (Electricians, Plumbers, Cleaners) in real-time. Built with **Flutter** and **Firebase**, it features a decentralized "Uber-style" job dispatch system, ensuring instant connections and secure transactions.
 
 ---
 
@@ -70,50 +70,6 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-## ⚙️ Installation & Setup
-
-To run this project locally, follow these steps:
-
-### Prerequisites
-* Flutter SDK (v3.0+)
-* Dart SDK
-* Android Studio / VS Code
-* Firebase Project Setup
-
-### Steps
-1.  **Clone the repository**
-    ```bash
-    git clone [https://github.com/Dhairya-Dudakiya/ServiceSphere.git](https://github.com/Dhairya-Dudakiya/ServiceSphere.git)
-    cd ServiceSphere
-    ```
-
-2.  **Install Dependencies**
-    ```bash
-    flutter pub get
-    ```
-
-3.  **Firebase Configuration**
-    * Download `google-services.json` from your Firebase Console.
-    * Place it in `android/app/`.
-
-4.  **API Keys**
-    * Create a `secrets.dart` file (or add to `local.properties`) to store your Google Maps API Key.
-
-5.  **Run the App**
-    ```bash
-    flutter run
-    ```
-
----
-
-## 👥 Team
-
-* **Dhairya Dudakiya** - *Team Lead & Full Stack Developer*
-* **Dhruv Manavadariya** - *Frontend & UI/UX*
-* **Parth Gohel** - *Backend Support & Testing*
-
----
-
 ## 📞 Contact
 
 If you have any questions or suggestions, feel free to reach out:
@@ -123,4 +79,4 @@ If you have any questions or suggestions, feel free to reach out:
 
 ---
 
-> This project was developed as a Final Year B.Tech Project at Marwadi University.
+> This project was developed as a Final Year B.Tech Project.
