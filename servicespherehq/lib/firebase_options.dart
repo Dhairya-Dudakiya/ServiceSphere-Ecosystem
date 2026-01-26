@@ -45,38 +45,45 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyBF7qRRg273qk8jgxQOWbepnW1laONUPoU',
-    appId: '1:38090365169:web:3f429c2d1a955a8c8f7150',
+    appId: '1:38090365169:web:678df1469abc49128f7150',
     messagingSenderId: '38090365169',
     projectId: 'servicesphere-2a2f1',
     authDomain: 'servicesphere-2a2f1.firebaseapp.com',
+    databaseURL: 'https://servicesphere-2a2f1-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'servicesphere-2a2f1.firebasestorage.app',
-    measurementId: 'G-QZ504YY5H4',
+    measurementId: 'G-088QNH5Q86',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBKConASxVx5hZExMlrO9-iYEdha3AFkTY',
-    appId: '1:38090365169:android:cc612b657f7c6e318f7150',
+    appId: '1:38090365169:android:02d365057523c85c8f7150',
     messagingSenderId: '38090365169',
     projectId: 'servicesphere-2a2f1',
+    databaseURL: 'https://servicesphere-2a2f1-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'servicesphere-2a2f1.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAczGK-SZoLhaUs0I3RikmWuXXCP_vSTHY',
-    appId: '1:38090365169:ios:4b9154c167c14a588f7150',
+    appId: '1:38090365169:ios:130b25857bc9122e8f7150',
     messagingSenderId: '38090365169',
     projectId: 'servicesphere-2a2f1',
+    databaseURL: 'https://servicesphere-2a2f1-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'servicesphere-2a2f1.firebasestorage.app',
-    iosBundleId: 'com.example.servicespherehq',
+    androidClientId: '38090365169-1ldubpk7969omle3i7ls111aurjatf8j.apps.googleusercontent.com',
+    iosClientId: '38090365169-b33hert6fuhjt79i5id7kt7pom8skpu4.apps.googleusercontent.com',
+    iosBundleId: 'com.servicesphere.admin',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyBF7qRRg273qk8jgxQOWbepnW1laONUPoU',
-    appId: '1:38090365169:web:e6615d07981462708f7150',
+    appId: '1:38090365169:web:c1625b4459b5014c8f7150',
     messagingSenderId: '38090365169',
     projectId: 'servicesphere-2a2f1',
     authDomain: 'servicesphere-2a2f1.firebaseapp.com',
+    databaseURL: 'https://servicesphere-2a2f1-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'servicesphere-2a2f1.firebasestorage.app',
-    measurementId: 'G-95YQ64EXTV',
+    measurementId: 'G-1ZYF44RDX3',
   );
+
 }

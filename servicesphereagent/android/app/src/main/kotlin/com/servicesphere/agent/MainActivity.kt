@@ -1,4 +1,4 @@
-package com.example.servicespherehq
+package com.servicesphere.agent
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -42,18 +42,18 @@ class ContactUsScreen extends StatelessWidget {
             _buildContactCard(
               icon: Icons.phone,
               title: "Call Support",
-              subtitle: "+91 98765 43210",
+              subtitle: "+91 88665 38397",
               color: Colors.green,
-              onTap: () => _launch(Uri(scheme: 'tel', path: '+919876543210')),
+              onTap: () => _launch(Uri(scheme: 'tel', path: '+918866538397')),
             ),
             const SizedBox(height: 16),
             _buildContactCard(
               icon: Icons.email,
               title: "Email Us",
-              subtitle: "support@servicesphere.com",
+              subtitle: "servicesphere.dev@gmail.com",
               color: Colors.blue,
               onTap: () => _launch(
-                  Uri(scheme: 'mailto', path: 'support@servicesphere.com')),
+                  Uri(scheme: 'mailto', path: 'servicesphere.dev@gmail.com')),
             ),
             const SizedBox(height: 16),
             _buildContactCard(
@@ -61,8 +61,8 @@ class ContactUsScreen extends StatelessWidget {
               title: "Visit Website",
               subtitle: "www.servicesphere.com",
               color: Colors.purple,
-              onTap: () =>
-                  _launch(Uri.parse('https://www.google.com')), // Placeholder
+              onTap: () => _launch(Uri.parse(
+                  'https://sites.google.com/view/service-sphere-policy/home')), // Placeholder
             ),
           ],
         ),
