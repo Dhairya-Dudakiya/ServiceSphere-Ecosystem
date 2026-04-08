@@ -27,6 +27,18 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
+## 📸 Screenshots & Demo
+
+> **Note:** Add 3-4 screenshots here showcasing your best UI (e.g., the User Booking Screen, the Live Tracking Map, and the Agent Earnings Dashboard). You can also add a short GIF showing the "Broadcast-and-Claim" flow!
+
+<p align="center">
+  <img src="link_to_screenshot_1" width="200"/>
+  <img src="link_to_screenshot_2" width="200"/>
+  <img src="link_to_screenshot_3" width="200"/>
+</p>
+
+---
+
 ## ✨ Key Features
 
 ### 👤 User Application
@@ -60,13 +72,10 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-## 📞 Contact
+## 🚀 Getting Started
 
-If you have any questions or suggestions, feel free to reach out:
+To run this project locally, follow these steps:
 
-* **Email:** dhairyadudakiya52056@gmail.com
-* **LinkedIn:** [Dhairya Dudakiya](https://www.linkedin.com/in/dhairya-dudakiya)
-
----
-
-> This project was developed as a Final Year B.Tech Project.
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/Dhairya-Dudakiya/ServiceSphere.git](https://github.com/Dhairya-Dudakiya/ServiceSphere.git)
