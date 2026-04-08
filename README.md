@@ -27,18 +27,6 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-## 📸 Screenshots & Demo
-
-> **Note:** Add 3-4 screenshots here showcasing your best UI (e.g., the User Booking Screen, the Live Tracking Map, and the Agent Earnings Dashboard). You can also add a short GIF showing the "Broadcast-and-Claim" flow!
-
-<p align="center">
-  <img src="link_to_screenshot_1" width="200"/>
-  <img src="link_to_screenshot_2" width="200"/>
-  <img src="link_to_screenshot_3" width="200"/>
-</p>
-
----
-
 ## ✨ Key Features
 
 ### 👤 User Application
