@@ -60,10 +60,4 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-## 🚀 Getting Started
 
-To run this project locally, follow these steps:
-
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/Dhairya-Dudakiya/ServiceSphere.git](https://github.com/Dhairya-Dudakiya/ServiceSphere.git)
