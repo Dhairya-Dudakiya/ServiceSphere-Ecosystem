@@ -1,11 +1,41 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // Added for Notifications
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  // --- PRIVATE HELPER: Save FCM Token ---
+  // This is the "Magic" that fixes your missing fcmToken field.
+  Future<void> _saveDeviceToken(String uid) async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      
+      // Request permission (Required for iOS, good practice for Android)
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        String? token = await messaging.getToken();
+
+        if (token != null) {
+          // Save or Update the token in the 'users' collection
+          await _firestore.collection('users').doc(uid).set({
+            'fcmToken': token,
+          }, SetOptions(merge: true));
+          print("FCM Token updated for user: $uid");
+        }
+      }
+    } catch (e) {
+      print("Error saving FCM token: $e");
+    }
+  }
 
   // --- Sign In with Email ---
   Future<UserCredential> signInWithEmail({
@@ -17,6 +47,12 @@ class AuthService {
         email: email,
         password: password,
       );
+
+      // Save token on successful login
+      if (userCredential.user != null) {
+        await _saveDeviceToken(userCredential.user!.uid);
+      }
+
       return userCredential;
     } on FirebaseAuthException catch (e) {
       throw Exception(e.message);
@@ -40,6 +76,7 @@ class AuthService {
 
       await userCredential.user?.updateDisplayName(fullName);
 
+      // Create the user document
       await _firestore.collection('users').doc(userCredential.user!.uid).set({
         'uid': userCredential.user!.uid,
         'email': email,
@@ -49,6 +86,9 @@ class AuthService {
         'userType': 'customer',
         'location': null,
       });
+
+      // Save token on successful registration
+      await _saveDeviceToken(userCredential.user!.uid);
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
@@ -96,6 +136,9 @@ class AuthService {
         });
       }
 
+      // Save token on successful Google login
+      await _saveDeviceToken(user.uid);
+
       return userCredential;
     } catch (e) {
       throw Exception(e.toString());
@@ -113,25 +156,24 @@ class AuthService {
     }
   }
 
-  // --- SIGN OUT (UPDATED) ---
+  // --- SIGN OUT ---
   Future<void> signOut() async {
     try {
-      // Try to sign out from Google first.
-      // This might fail if the user didn't sign in with Google.
-      await _googleSignIn.signOut();
-    } catch (e) {
-      // Log this error, but don't stop the function.
-      print("Error signing out from Google: $e");
-    }
+      // It's good practice to clear the token on logout 
+      // so the user doesn't get notifications after logging out.
+      final user = _auth.currentUser;
+      if (user != null) {
+        await _firestore.collection('users').doc(user.uid).update({
+          'fcmToken': FieldValue.delete(),
+        });
+      }
 
-    try {
-      // This is the most important one.
-      // This line will trigger the AuthGate stream.
+      await _googleSignIn.signOut();
       await _auth.signOut();
     } catch (e) {
-      // Log any errors during Firebase sign out.
-      print("Error signing out from Firebase: $e");
-      throw Exception("Failed to sign out.");
+      print("Error during sign out: $e");
+      // Still attempt Firebase sign out even if Google fails
+      await _auth.signOut();
     }
   }
 }

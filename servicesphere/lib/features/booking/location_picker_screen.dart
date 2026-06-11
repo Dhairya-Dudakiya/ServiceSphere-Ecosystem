@@ -13,9 +13,10 @@ class LocationPickerScreen extends StatefulWidget {
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final MapController _mapController = MapController();
 
-  // Default Location: New Delhi (Just a placeholder until GPS loads)
+  // Default Location: New Delhi placeholder until GPS settles
   LatLng _selectedLocation = const LatLng(28.6139, 77.2090);
   bool _isLoadingLocation = true;
+  bool _isSatelliteView = false;
 
   @override
   void initState() {
@@ -23,15 +24,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     _determinePosition();
   }
 
-  // --- 1. GET CURRENT GPS LOCATION ---
   Future<void> _determinePosition() async {
+    setState(() => _isLoadingLocation = true);
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Check if GPS is on
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Location services are disabled.
       setState(() => _isLoadingLocation = false);
       return;
     }
@@ -40,124 +39,217 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Permissions are denied
         setState(() => _isLoadingLocation = false);
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever
       setState(() => _isLoadingLocation = false);
       return;
     }
 
-    // Get position
-    Position position = await Geolocator.getCurrentPosition();
+    // 🔥 FIX 1: Forced HIGH ACCURACY GPS lock
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.best,
+    );
+
     setState(() {
       _selectedLocation = LatLng(position.latitude, position.longitude);
       _isLoadingLocation = false;
     });
 
-    // Move map to user
-    _mapController.move(_selectedLocation, 15.0);
+    // 🔥 FIX 2: Zoomed all the way in to 18.0 (Building/Street level)
+    _mapController.move(_selectedLocation, 18.0);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final String mapUrlTemplate = _isSatelliteView
+        ? 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+        : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text(
-          "Pick Service Location",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        title: Text(
+          "Choose Exact Location",
+          style: TextStyle(
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
+              fontWeight: FontWeight.w800,
+              fontSize: 18),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: isDark
+            ? const Color(0xFF121212).withOpacity(0.85)
+            : Colors.white.withOpacity(0.9),
         elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              color: isDark ? Colors.white : const Color(0xFF1E293B), size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Stack(
         children: [
-          // --- 2. THE MAP ---
+          // --- THE MAP LAYER ---
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _selectedLocation,
-              initialZoom: 15.0,
-              // Update selected location when map moves
+              initialZoom: 18.0, // Start very close
               onPositionChanged: (position, hasGesture) {
                 if (position.center != null) {
                   _selectedLocation = position.center!;
                 }
               },
+              // 🔥 FIX 3: Tap-to-Snap! Tapping anywhere moves the center pin exactly there
+              onTap: (tapPosition, point) {
+                setState(() {
+                  _selectedLocation = point;
+                });
+                _mapController.move(point, 18.0);
+              },
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: mapUrlTemplate,
                 userAgentPackageName: 'com.example.servicesphere',
               ),
             ],
           ),
 
-          // --- 3. CENTER PIN (FIXED) ---
-          const Center(
+          // --- NATIVE FLOATING MAP PIN ---
+          Center(
             child: Padding(
-              padding: EdgeInsets.only(
-                  bottom: 40), // Offset to put pin tip on center
-              child: Icon(
-                Icons.location_on,
-                color: Colors.red,
-                size: 50,
+              padding: const EdgeInsets.only(bottom: 36),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                            color: theme.colorScheme.primary.withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6)),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: const Icon(Icons.handshake_rounded,
+                        color: Colors.white, size: 24),
+                  ),
+                  Container(
+                    width: 4,
+                    height: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.black38,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // --- 4. CONFIRM BUTTON ---
+          // --- MAP TYPE TOGGLE (SATELLITE / STREET) ---
+          Positioned(
+            top: 110,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: "layer_fab",
+              mini: true,
+              elevation: 4,
+              backgroundColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+              foregroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              onPressed: () =>
+                  setState(() => _isSatelliteView = !_isSatelliteView),
+              child: Icon(
+                  _isSatelliteView ? Icons.map_rounded : Icons.layers_rounded,
+                  size: 20),
+            ),
+          ),
+
+          // --- MY LOCATION FLOATING FAB ---
+          Positioned(
+            bottom: 116,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: "gps_fab",
+              elevation: 4,
+              backgroundColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+              foregroundColor: theme.colorScheme.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              onPressed: _determinePosition,
+              child: const Icon(Icons.my_location_rounded, size: 22),
+            ),
+          ),
+
+          // --- BOTTOM ACTION CARD ---
           Positioned(
             bottom: 30,
             left: 20,
             right: 20,
-            child: SizedBox(
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Return the LatLng to the previous screen
-                  Navigator.pop(context, _selectedLocation);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  elevation: 4,
-                ),
-                child: const Text(
-                  "Confirm Location",
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.4 : 0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8)),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: () =>
+                          Navigator.pop(context, _selectedLocation),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text(
+                        "Confirm Location",
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // --- 5. MY LOCATION BUTTON ---
-          Positioned(
-            bottom: 100,
-            right: 20,
-            child: FloatingActionButton(
-              backgroundColor: Colors.white,
-              onPressed: _determinePosition,
-              child: const Icon(Icons.my_location, color: Colors.black87),
-            ),
-          ),
-
-          // Loading overlay
           if (_isLoadingLocation)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(0.4),
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],

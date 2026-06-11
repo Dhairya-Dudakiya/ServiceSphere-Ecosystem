@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
-// Ensure this path matches your project structure
 import 'package:servicesphere/features/booking/location_picker_screen.dart';
 
 class ManageAddressesScreen extends StatefulWidget {
@@ -16,7 +15,6 @@ class ManageAddressesScreen extends StatefulWidget {
 class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
   final User? user = FirebaseAuth.instance.currentUser;
 
-  // --- DELETE ADDRESS LOGIC ---
   Future<void> _deleteAddress(String docId) async {
     try {
       await FirebaseFirestore.instance
@@ -25,54 +23,56 @@ class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
           .collection('addresses')
           .doc(docId)
           .delete();
-
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Address removed successfully")),
-        );
-      }
+            const SnackBar(content: Text("Address removed successfully")));
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error removing address: $e")),
-        );
-      }
+            SnackBar(content: Text("Error removing address: $e")));
     }
   }
 
-  // --- OPEN BOTTOM SHEET ---
   void _openAddAddressSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // Allows rounded corners to show
+      backgroundColor: Colors.transparent,
       builder: (ctx) => const _AddAddressSheet(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (user == null) {
+    if (user == null)
       return const Scaffold(body: Center(child: Text("Please login")));
-    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F6FA);
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text(
-          "Manage Addresses",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
+        title: Text("Manage Addresses",
+            style: TextStyle(
+                color: textColor, fontWeight: FontWeight.w800, fontSize: 18)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
         centerTitle: true,
+        leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded,
+                color: textColor, size: 20),
+            onPressed: () => Navigator.pop(context)),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddAddressSheet,
-        label: const Text("Add New"),
-        icon: const Icon(Icons.add),
+        elevation: 4,
+        label: const Text("Add New",
+            style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+        icon: const Icon(Icons.add_location_alt_rounded),
         backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -82,42 +82,48 @@ class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-          }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.location_off, size: 80, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
-                  Text(
-                    "No saved addresses",
-                    style: TextStyle(color: Colors.grey[600], fontSize: 18),
-                  ),
+                  Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                          color:
+                              isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                          shape: BoxShape.circle),
+                      child: Icon(Icons.location_off_rounded,
+                          size: 64,
+                          color: isDark ? Colors.white24 : Colors.grey[300])),
+                  const SizedBox(height: 24),
+                  Text("No saved addresses",
+                      style: TextStyle(
+                          color: textColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  Text(
-                    "Tap 'Add New' to save your location",
-                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                  ),
+                  Text("Tap 'Add New' to save your location",
+                      style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[500],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500)),
                 ],
               ),
             );
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             itemCount: snapshot.data!.docs.length,
-            separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+            separatorBuilder: (ctx, i) => const SizedBox(height: 16),
             itemBuilder: (context, index) {
               final doc = snapshot.data!.docs[index];
-              final data = doc.data() as Map<String, dynamic>;
               return _AddressCard(
-                data: data,
-                onDelete: () => _deleteAddress(doc.id),
-              );
+                  data: doc.data() as Map<String, dynamic>,
+                  onDelete: () => _deleteAddress(doc.id));
             },
           );
         },
@@ -126,102 +132,68 @@ class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
   }
 }
 
-// ============================================================================
-// WIDGET 1: THE ADDRESS CARD (Improved Styling)
-// ============================================================================
 class _AddressCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final VoidCallback onDelete;
-
   const _AddressCard({required this.data, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final String label = data['label'] ?? 'Address';
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                blurRadius: 15,
+                offset: const Offset(0, 5))
+          ]),
       child: ListTile(
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.location_on, color: Colors.blue, size: 24),
-        ),
-        title: Text(
-          data['label'] ?? 'Address',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black, // <--- FIXED: BLACK COLOR
-            fontSize: 16,
-          ),
-        ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14)),
+            child: Icon(
+                label.toLowerCase() == 'home'
+                    ? Icons.home_rounded
+                    : label.toLowerCase() == 'office'
+                        ? Icons.work_rounded
+                        : Icons.location_on_rounded,
+                color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+                size: 24)),
+        title: Text(label.toUpperCase(),
+            style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                fontSize: 13,
+                letterSpacing: 1.0)),
         subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            data['fullAddress'] ?? '',
-            style: const TextStyle(
-              color: Colors.black87, // <--- FIXED: DARK COLOR
-              fontSize: 14,
-              height: 1.3,
-            ),
-          ),
-        ),
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(data['fullAddress'] ?? '',
+                style: TextStyle(
+                    color: isDark ? Colors.grey[300] : const Color(0xFF64748B),
+                    fontSize: 14,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500))),
         trailing: IconButton(
-          icon:
-              const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                title: const Text("Delete Address"),
-                content: const Text(
-                    "Are you sure you want to remove this location?"),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text("Cancel")),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      onDelete();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text("Delete"),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+            icon:
+                Icon(Icons.delete_outline_rounded, color: Colors.red.shade400),
+            onPressed: onDelete),
       ),
     );
   }
 }
 
-// ============================================================================
-// WIDGET 2: THE BOTTOM SHEET FORM (Extracted for better state management)
-// ============================================================================
 class _AddAddressSheet extends StatefulWidget {
   const _AddAddressSheet();
-
   @override
   State<_AddAddressSheet> createState() => _AddAddressSheetState();
 }
@@ -233,23 +205,13 @@ class _AddAddressSheetState extends State<_AddAddressSheet> {
   bool _isSaving = false;
   GeoPoint? _selectedGeoPoint;
 
-  @override
-  void dispose() {
-    _labelController.dispose();
-    _addressController.dispose();
-    super.dispose();
-  }
-
   Future<void> _saveAddress() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
-    final user = FirebaseAuth.instance.currentUser;
-
     try {
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(user!.uid)
+          .doc(FirebaseAuth.instance.currentUser!.uid)
           .collection('addresses')
           .add({
         'label': _labelController.text.trim(),
@@ -257,46 +219,35 @@ class _AddAddressSheetState extends State<_AddAddressSheet> {
         'location': _selectedGeoPoint,
         'createdAt': FieldValue.serverTimestamp(),
       });
-
       if (mounted) {
-        Navigator.pop(context); // Close sheet
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Address saved successfully!")),
-        );
+            const SnackBar(content: Text("Address saved successfully!")));
       }
     } catch (e) {
       setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
-        );
-      }
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
   Future<void> _pickLocation() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const LocationPickerScreen()),
-    );
-
+    final result = await Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const LocationPickerScreen()));
     if (result != null && result is LatLng) {
       setState(() {
         _selectedGeoPoint = GeoPoint(result.latitude, result.longitude);
       });
-
-      // Reverse Geocoding
       try {
         List<Placemark> placemarks =
             await placemarkFromCoordinates(result.latitude, result.longitude);
-
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
           String formattedAddress =
               "${place.name}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}";
-          // Remove leading commas if any field was null/empty
-          formattedAddress = formattedAddress.replaceAll(RegExp(r'^, | ,'), '');
-          _addressController.text = formattedAddress;
+          _addressController.text =
+              formattedAddress.replaceAll(RegExp(r'^, | ,'), '');
         } else {
           _addressController.text = "Pinned Location (Address not found)";
         }
@@ -309,17 +260,20 @@ class _AddAddressSheetState extends State<_AddAddressSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final inputBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8FAFC);
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        left: 24,
-        right: 24,
-        top: 24,
-      ),
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          left: 24,
+          right: 24,
+          top: 12),
       child: Form(
         key: _formKey,
         child: Column(
@@ -327,89 +281,105 @@ class _AddAddressSheetState extends State<_AddAddressSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "Add New Address",
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
-            ),
-            const SizedBox(height: 20),
-
-            // LABEL INPUT
+                child: Container(
+                    width: 48,
+                    height: 5,
+                    decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 32),
+            Text("Add New Address",
+                style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: textColor,
+                    fontSize: 24,
+                    letterSpacing: -0.5)),
+            const SizedBox(height: 24),
             TextFormField(
               controller: _labelController,
               textCapitalization: TextCapitalization.words,
+              style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
               decoration: InputDecoration(
-                labelText: "Label",
-                hintText: "e.g. Home, Office, Parents' House",
-                prefixIcon: const Icon(Icons.bookmark_border),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                labelText: "Label (e.g. Home, Office)",
+                labelStyle: TextStyle(
+                    color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500),
+                prefixIcon: Icon(Icons.bookmark_outline_rounded,
+                    color: isDark ? Colors.grey[500] : const Color(0xFF94A3B8)),
+                filled: true,
+                fillColor: inputBg,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                        color: Theme.of(context).primaryColor, width: 2)),
               ),
               validator: (val) =>
                   val == null || val.isEmpty ? "Please enter a label" : null,
             ),
             const SizedBox(height: 16),
-
-            // ADDRESS INPUT
             TextFormField(
               controller: _addressController,
               maxLines: 2,
+              style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
               decoration: InputDecoration(
                 labelText: "Full Address",
-                hintText: "Enter address or pick from map",
-                prefixIcon: const Icon(Icons.map_outlined),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                suffixIcon: IconButton(
-                  onPressed: _pickLocation,
-                  icon:
-                      const Icon(Icons.location_searching, color: Colors.blue),
-                  tooltip: "Pick on Map",
-                ),
+                labelStyle: TextStyle(
+                    color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500),
+                prefixIcon: Icon(Icons.map_outlined,
+                    color: isDark ? Colors.grey[500] : const Color(0xFF94A3B8)),
+                filled: true,
+                fillColor: inputBg,
+                suffixIcon: Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10)),
+                    child: IconButton(
+                        onPressed: _pickLocation,
+                        icon: Icon(Icons.my_location_rounded,
+                            color: isDark
+                                ? Colors.blue.shade300
+                                : Colors.blue.shade700))),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                        color: Theme.of(context).primaryColor, width: 2)),
               ),
               validator: (val) =>
                   val == null || val.isEmpty ? "Please enter an address" : null,
             ),
-            const SizedBox(height: 24),
-
-            // SAVE BUTTON
+            const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
-              height: 54,
+              height: 56,
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _saveAddress,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  elevation: 2,
-                ),
+                    backgroundColor: Theme.of(context).primaryColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    elevation: 4,
+                    shadowColor:
+                        Theme.of(context).primaryColor.withOpacity(0.5)),
                 child: _isSaving
                     ? const SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5),
-                      )
-                    : const Text(
-                        "Save Address",
+                            color: Colors.white, strokeWidth: 2.5))
+                    : const Text("Save Address",
                         style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white),
-                      ),
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.5)),
               ),
             ),
           ],

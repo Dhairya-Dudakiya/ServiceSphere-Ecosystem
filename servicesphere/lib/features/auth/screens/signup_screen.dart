@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:servicesphere/features/auth/services/auth_services.dart';
-// --- IMPORT AUTH GATE ---
 import 'package:servicesphere/auth_gate.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -12,8 +13,8 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
-  // 1. NEW: Password Visibility Toggle
   bool _isObscure = true;
+  bool _isOtpSent = false;
 
   final _formKey = GlobalKey<FormState>();
   final _authService = AuthService();
@@ -21,44 +22,98 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _fullNameController = TextEditingController();
+  final _otpController = TextEditingController();
 
-  Future<void> _signUp() async {
-    // 2. NEW: Dismiss Keyboard
+  // --- PHASE 1: Request OTP ---
+  Future<void> _requestOtp() async {
     FocusScope.of(context).unfocus();
-
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      await _authService.signUpWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        fullName: _fullNameController.text.trim(),
-      );
+      HttpsCallable callable =
+          FirebaseFunctions.instance.httpsCallable('requestEmailOTP');
+      await callable.call(<String, dynamic>{
+        'email': _emailController.text.trim(),
+      });
 
       if (mounted) {
-        // 3. NEW LOGIC: Go DIRECTLY to Home (AuthGate handles the routing)
-        // This removes the Login screen from the back stack too.
+        setState(() {
+          _isOtpSent = true;
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('OTP sent to your email!'),
+              backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Could not send OTP. Please try again."),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // --- PHASE 2: Verify OTP ---
+  Future<void> _verifyOtpAndSignUp() async {
+    FocusScope.of(context).unfocus();
+    if (_otpController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please enter the full 6-digit code'),
+            backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      HttpsCallable callable =
+          FirebaseFunctions.instance.httpsCallable('verifyEmailOTP');
+      final result = await callable.call(<String, dynamic>{
+        'email': _emailController.text.trim(),
+        'otp': _otpController.text.trim(),
+        'fullName': _fullNameController.text.trim(),
+      });
+
+      String customToken = result.data['token'];
+      await FirebaseAuth.instance.signInWithCustomToken(customToken);
+
+      if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const AuthGate()),
           (route) => false,
         );
       }
-    } catch (e) {
+    } on FirebaseFunctionsException catch (e) {
       if (mounted) {
+        setState(() => _isLoading = false);
+        // Clean error handling based on backend response
+        String errorMessage = e.code == 'permission-denied'
+            ? "Incorrect OTP. Please try again."
+            : "Server configuration error. Check backend logs.";
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
         );
       }
-    } finally {
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("An unexpected error occurred."),
+              backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -68,6 +123,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _fullNameController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -93,18 +149,16 @@ class _SignupScreenState extends State<SignupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- Logo ---
                   Image.asset(
-                    'assets/images/logo.png', // Fixed Path
+                    'assets/images/logo.png',
                     height: 80,
                     color: logoColor,
                     errorBuilder: (context, error, stackTrace) =>
                         Icon(Icons.person_add, size: 80, color: logoColor),
                   ),
                   const SizedBox(height: 16),
-
                   Text(
-                    'Create Your Account',
+                    _isOtpSent ? 'Verify Your Email' : 'Create Your Account',
                     textAlign: TextAlign.center,
                     style: Theme.of(context)
                         .textTheme
@@ -113,96 +167,108 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Sign up to get started',
+                    _isOtpSent
+                        ? 'We sent a 6-digit code to ${_emailController.text}'
+                        : 'Sign up to get started',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
                   const SizedBox(height: 32),
-
-                  // --- Full Name ---
-                  TextFormField(
-                    controller: _fullNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Full Name',
-                      prefixIcon: Icon(Icons.person_outline),
+                  if (!_isOtpSent) ...[
+                    TextFormField(
+                      controller: _fullNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Full Name',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Please enter your name'
+                          : null,
                     ),
-                    validator: (value) => value == null || value.isEmpty
-                        ? 'Please enter your name'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // --- Email ---
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (value) =>
+                          value == null || !value.contains('@')
+                              ? 'Please enter a valid email'
+                              : null,
                     ),
-                    validator: (value) => value == null || !value.contains('@')
-                        ? 'Please enter a valid email'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // --- Password ---
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _isObscure,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      // 4. NEW: Eye Icon
-                      suffixIcon: IconButton(
-                        icon: Icon(_isObscure
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () {
-                          setState(() {
-                            _isObscure = !_isObscure;
-                          });
-                        },
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _isObscure,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(_isObscure
+                              ? Icons.visibility_off
+                              : Icons.visibility),
+                          onPressed: () =>
+                              setState(() => _isObscure = !_isObscure),
+                        ),
+                      ),
+                      validator: (value) => value == null || value.length < 6
+                          ? 'Password must be at least 6 characters'
+                          : null,
+                    ),
+                  ],
+                  if (_isOtpSent) ...[
+                    TextFormField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 24,
+                          letterSpacing: 8,
+                          fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        labelText: '6-Digit Code',
+                        counterText: "",
+                        prefixIcon: const Icon(Icons.security),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
-                    validator: (value) => value == null || value.length < 6
-                        ? 'Password must be at least 6 characters'
-                        : null,
-                  ),
+                  ],
                   const SizedBox(height: 24),
-
-                  // --- Sign Up Button ---
                   SizedBox(
-                    height: 50, // Fixed height matches Login
+                    height: 50,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _signUp,
+                      onPressed: _isLoading
+                          ? null
+                          : (_isOtpSent ? _verifyOtpAndSignUp : _requestOtp),
                       child: _isLoading
                           ? const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2))
-                          : const Text('Sign Up',
-                              style: TextStyle(fontSize: 16)),
+                          : Text(_isOtpSent ? 'Verify & Sign Up' : 'Send OTP',
+                              style: const TextStyle(fontSize: 16)),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // --- Login Navigation ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Already have an account?'),
-                      TextButton(
-                        onPressed:
-                            _isLoading ? null : () => Navigator.pop(context),
-                        child: const Text('Log In'),
-                      ),
-                    ],
-                  ),
+                  if (!_isOtpSent)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Already have an account?'),
+                        TextButton(
+                          onPressed:
+                              _isLoading ? null : () => Navigator.pop(context),
+                          child: const Text('Log In'),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

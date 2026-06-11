@@ -1,12 +1,13 @@
-import 'dart:io'; // Required for File
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // Required for Upload
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:image_picker/image_picker.dart'; // Required for Image
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:servicesphere/features/booking/location_picker_screen.dart';
 
 class BookServiceScreen extends StatefulWidget {
@@ -27,97 +28,244 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  // Scheduling Variables
+  // Scheduling
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
-  // Location Variable
+  // Location
   GeoPoint? _selectedGeoPoint;
 
-  // Image Variable
+  // Image
   XFile? _selectedImage;
 
   bool _isLoading = false;
 
+  // ─── LIFECYCLE ─────────────────────────────────────────────────────────────
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  // ─── CATEGORY HINTS ────────────────────────────────────────────────────────
+
   Map<String, String> _getCategoryHints() {
     final category = widget.categoryName.toLowerCase();
+
     if (category.contains('clean')) {
       return {
         'title': 'e.g. Deep Cleaning 2BHK',
-        'desc': 'Need kitchen and 2 bathrooms deep cleaned...'
+        'desc': 'Need kitchen and 2 bathrooms deep cleaned...',
       };
     } else if (category.contains('plumb')) {
       return {
         'title': 'e.g. Fix Leaking Sink',
-        'desc': 'Water leaking from the pipe under the kitchen sink...'
+        'desc': 'Water leaking from the pipe under the kitchen sink...',
+      };
+    } else if (category.contains('electr')) {
+      return {
+        'title': 'e.g. Fix Power Outlet',
+        'desc': 'Socket in the bedroom not working, needs inspection...',
+      };
+    } else if (category.contains('paint')) {
+      return {
+        'title': 'e.g. Paint Living Room',
+        'desc': 'Living room walls need repainting, approx 400 sq ft...',
+      };
+    } else if (category.contains('ac') || category.contains('repair')) {
+      return {
+        'title': 'e.g. AC Not Cooling',
+        'desc': 'Split AC in bedroom not cooling, making noise...',
+      };
+    } else if (category.contains('carpent')) {
+      return {
+        'title': 'e.g. Fix Broken Cabinet',
+        'desc': 'Kitchen cabinet door hinge broken, needs replacement...',
+      };
+    } else if (category.contains('appliance')) {
+      return {
+        'title': 'e.g. Washing Machine Repair',
+        'desc': 'Washing machine not spinning, making loud noise...',
+      };
+    } else if (category.contains('pest')) {
+      return {
+        'title': 'e.g. Cockroach Treatment',
+        'desc': 'Cockroach infestation in kitchen and bathroom...',
+      };
+    } else if (category.contains('garden')) {
+      return {
+        'title': 'e.g. Garden Trimming',
+        'desc': 'Need lawn mowed and plants trimmed in backyard...',
+      };
+    } else if (category.contains('secur')) {
+      return {
+        'title': 'e.g. Install CCTV Camera',
+        'desc': 'Need 2 CCTV cameras installed at entrance and backyard...',
+      };
+    } else if (category.contains('mov')) {
+      return {
+        'title': 'e.g. Move 2BHK Furniture',
+        'desc': 'Need help moving furniture from 2BHK to new flat nearby...',
       };
     }
+
     return {
-      'title': 'e.g. General Repair',
-      'desc': 'Describe the issue or service you need...'
+      'title': 'e.g. General Service',
+      'desc': 'Describe the issue or service you need...',
     };
   }
 
-  // --- 1. PICK IMAGE ---
+  // ─── PICK IMAGE ────────────────────────────────────────────────────────────
+
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Take a Picture'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final XFile? image =
-                    await picker.pickImage(source: ImageSource.camera);
-                if (image != null) setState(() => _selectedImage = image);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Choose from Gallery'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final XFile? image =
-                    await picker.pickImage(source: ImageSource.gallery);
-                if (image != null) setState(() => _selectedImage = image);
-              },
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.camera_alt_rounded,
+                      color: Theme.of(context).primaryColor),
+                ),
+                title: const Text('Take a Picture',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final XFile? image =
+                      await picker.pickImage(source: ImageSource.camera);
+                  if (image != null) setState(() => _selectedImage = image);
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.photo_library_rounded,
+                      color: Theme.of(context).primaryColor),
+                ),
+                title: const Text('Choose from Gallery',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final XFile? image =
+                      await picker.pickImage(source: ImageSource.gallery);
+                  if (image != null) setState(() => _selectedImage = image);
+                },
+              ),
+              if (_selectedImage != null) ...[
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded,
+                        color: Colors.red),
+                  ),
+                  title: const Text('Remove Photo',
+                      style: TextStyle(
+                          color: Colors.red, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _selectedImage = null);
+                  },
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // ─── COMPRESS & UPLOAD IMAGE ───────────────────────────────────────────────
+
+  Future<String?> _uploadImage(String userId) async {
+    if (_selectedImage == null) return null;
+
+    try {
+      // Compress before uploading — reduces size by ~70%
+      final compressedBytes = await FlutterImageCompress.compressWithFile(
+        _selectedImage!.path,
+        minWidth: 800,
+        minHeight: 800,
+        quality: 75,
+      );
+
+      if (compressedBytes == null) return null;
+
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('job_images')
+          .child('${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      await storageRef.putData(compressedBytes);
+      return await storageRef.getDownloadURL();
+    } catch (e) {
+      debugPrint('Image upload error: $e');
+      return null;
+    }
+  }
+
+  // ─── PICK LOCATION ─────────────────────────────────────────────────────────
+
   Future<void> _pickLocationOnMap() async {
-    final result = await Navigator.push(context,
-        MaterialPageRoute(builder: (context) => const LocationPickerScreen()));
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
+    );
 
     if (result != null && result is LatLng) {
       setState(() => _isLoading = true);
       try {
         _selectedGeoPoint = GeoPoint(result.latitude, result.longitude);
-        List<Placemark> placemarks =
-            await placemarkFromCoordinates(result.latitude, result.longitude);
+        final placemarks = await placemarkFromCoordinates(
+          result.latitude,
+          result.longitude,
+        );
         if (placemarks.isNotEmpty) {
-          Placemark place = placemarks[0];
-          String formattedAddress =
-              "${place.name}, ${place.subLocality}, ${place.locality}";
-          formattedAddress = formattedAddress.replaceAll(RegExp(r'^, | ,'), '');
-          _addressController.text = formattedAddress;
+          final place = placemarks[0];
+          String formatted =
+              '${place.name}, ${place.subLocality}, ${place.locality}';
+          formatted = formatted.replaceAll(RegExp(r'^, | ,'), '').trim();
+          _addressController.text = formatted;
         } else {
-          _addressController.text = "Pinned Location";
+          _addressController.text = 'Pinned Location';
         }
       } catch (e) {
-        _addressController.text = "Pinned Location";
+        _addressController.text = 'Pinned Location';
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     }
   }
+
+  // ─── DATE & TIME ───────────────────────────────────────────────────────────
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -138,11 +286,30 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
+  // ─── POST JOB ──────────────────────────────────────────────────────────────
+
   Future<void> _postJob() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_selectedDate == null || _selectedTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a Date and Time.")),
+        const SnackBar(
+          content: Text('Please select a Date and Time.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedGeoPoint == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Please pin your location on the map for accurate agent matching.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -153,21 +320,12 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("You must be logged in to book!")));
+          const SnackBar(content: Text('You must be logged in to book!')),
+        );
         return;
       }
 
-      // --- 2. UPLOAD IMAGE TO FIREBASE STORAGE ---
-      String? imageUrl;
-      if (_selectedImage != null) {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('job_images')
-            .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-        await storageRef.putFile(File(_selectedImage!.path));
-        imageUrl = await storageRef.getDownloadURL();
-      }
+      final String? imageUrl = await _uploadImage(user.uid);
 
       final scheduledDateTime = DateTime(
         _selectedDate!.year,
@@ -177,68 +335,94 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
         _selectedTime!.minute,
       );
 
-      // --- 3. SAVE TO FIRESTORE ---
       await FirebaseFirestore.instance.collection('serviceRequests').add({
         'title': _titleController.text.trim(),
         'description': _descController.text.trim(),
         'address': _addressController.text.trim(),
-        // 'price' is 0 because Agent will Quote
         'price': 0.0,
         'customerPhone': _phoneController.text.trim(),
         'category': widget.categoryName,
-        // Status is 'pending_quote' so Agent App shows "Quote Price" button
         'status': 'pending_quote',
         'customerId': user.uid,
         'customerName': user.displayName ?? 'Valued Customer',
         'createdAt': FieldValue.serverTimestamp(),
         'scheduledTime': Timestamp.fromDate(scheduledDateTime),
         'location': _selectedGeoPoint,
-        'imageUrl': imageUrl, // Save image link
+        'latitude': _selectedGeoPoint!.latitude,
+        'longitude': _selectedGeoPoint!.longitude,
+        'imageUrl': imageUrl,
+        'isReadByUser': false,
+        'isHiddenFromUser': false,
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text("Request Sent! Waiting for Agent Quotes."),
-              backgroundColor: Colors.green),
+            content: Text('Request Sent! Waiting for Agent Quotes.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
         Navigator.pop(context);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error posting job: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // ─── BUILD ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hints = _getCategoryHints();
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Premium Colors
+    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF4F7FC);
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: bgColor,
       body: CustomScrollView(
         slivers: [
+          // ── APP BAR ────────────────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 100.0,
             pinned: true,
-            backgroundColor: const Color(0xFFF8F9FA),
+            backgroundColor: isDark ? const Color(0xFF1E1E1E) : bgColor,
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              icon: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: textColor,
+                size: 20,
+              ),
               onPressed: () => Navigator.pop(context),
             ),
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
               title: Text(
-                "Book ${widget.categoryName}",
-                style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold, color: Colors.black87),
+                'Book ${widget.categoryName}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: textColor,
+                  fontSize: 18,
+                ),
               ),
             ),
           ),
+
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -247,68 +431,136 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Describe your task",
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87)),
+                    // ── HEADER ─────────────────────────────────────────
+                    Text(
+                      'Describe your task',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
-                        "Describe the issue. Agents will review and send a price quote.",
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: Colors.grey[600])),
+                      'Describe the issue clearly. Verified nearby agents will review your post and offer precise price quotes.',
+                      style: TextStyle(
+                        color:
+                            isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                        fontSize: 14,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(height: 32),
 
-                    // --- 4. IMAGE PICKER UI ---
+                    // ── IMAGE PICKER ───────────────────────────────────
                     GestureDetector(
                       onTap: _pickImage,
                       child: Container(
-                        height: 150,
+                        height: 160,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade300),
+                          color:
+                              isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                           image: _selectedImage != null
                               ? DecorationImage(
                                   image: FileImage(File(_selectedImage!.path)),
-                                  fit: BoxFit.cover)
+                                  fit: BoxFit.cover,
+                                )
                               : null,
                         ),
                         child: _selectedImage == null
                             ? Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add_a_photo,
-                                      size: 40, color: theme.primaryColor),
-                                  const SizedBox(height: 8),
-                                  const Text("Add Photo (Optional)",
-                                      style: TextStyle(
-                                          color: Colors.grey,
-                                          fontWeight: FontWeight.bold)),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.add_photo_alternate_rounded,
+                                      size: 32,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Add Reference Photo (Optional)',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : const Color(0xFF64748B),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                 ],
                               )
-                            : null,
+                            : Stack(
+                                children: [
+                                  Positioned(
+                                    top: 12,
+                                    right: 12,
+                                    child: GestureDetector(
+                                      onTap: () =>
+                                          setState(() => _selectedImage = null),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.black54,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.close_rounded,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
 
+                    // ── JOB TITLE ──────────────────────────────────────
                     _buildTextField(
-                        context: context,
-                        controller: _titleController,
-                        label: "Job Title",
-                        hint: hints['title']!,
-                        icon: Icons.title,
-                        validator: (v) => v!.isEmpty ? "Required" : null),
-                    const SizedBox(height: 20),
-                    _buildTextField(
-                        context: context,
-                        controller: _descController,
-                        label: "Description",
-                        hint: hints['desc']!,
-                        icon: Icons.description_outlined,
-                        maxLines: 3),
+                      context: context,
+                      controller: _titleController,
+                      label: 'Job Title',
+                      hint: hints['title']!,
+                      icon: Icons.assignment_outlined,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
                     const SizedBox(height: 20),
 
+                    // ── DESCRIPTION ────────────────────────────────────
+                    _buildTextField(
+                      context: context,
+                      controller: _descController,
+                      label: 'Detailed Description',
+                      hint: hints['desc']!,
+                      icon: Icons.description_outlined,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── DATE & TIME ────────────────────────────────────
                     Row(
                       children: [
                         Expanded(
@@ -316,12 +568,13 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                             onTap: _pickDate,
                             child: _buildPickerContainer(
                               context,
-                              icon: Icons.calendar_today,
-                              label: "Date",
+                              icon: Icons.calendar_today_rounded,
+                              label: 'Scheduled Date',
                               value: _selectedDate == null
-                                  ? "Select Date"
+                                  ? 'Select Date'
                                   : DateFormat('MMM dd, yyyy')
                                       .format(_selectedDate!),
+                              isSelected: _selectedDate != null,
                             ),
                           ),
                         ),
@@ -331,11 +584,12 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                             onTap: _pickTime,
                             child: _buildPickerContainer(
                               context,
-                              icon: Icons.access_time,
-                              label: "Time",
+                              icon: Icons.access_time_rounded,
+                              label: 'Preferred Time',
                               value: _selectedTime == null
-                                  ? "Select Time"
+                                  ? 'Select Time'
                                   : _selectedTime!.format(context),
+                              isSelected: _selectedTime != null,
                             ),
                           ),
                         ),
@@ -343,63 +597,133 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Address
+                    // ── ADDRESS ────────────────────────────────────────
                     _buildTextField(
                       context: context,
                       controller: _addressController,
-                      label: "Address",
-                      hint: "Type address or pick on map",
-                      icon: Icons.location_on_outlined,
-                      validator: (v) => v!.isEmpty ? "Required" : null,
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.map, color: Colors.blue),
-                        onPressed: _pickLocationOnMap,
-                        tooltip: "Pick on Map",
-                      ),
+                      label: 'Service Address',
+                      hint: 'Type address or drop map pin',
+                      icon: Icons.map_outlined,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                      suffixIcon: _isLoading
+                          ? const Padding(
+                              padding: EdgeInsets.all(14),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2.5),
+                              ),
+                            )
+                          : Container(
+                              margin: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.pin_drop_rounded,
+                                    color: Colors.blue),
+                                onPressed: _pickLocationOnMap,
+                                tooltip: 'Pin on Map',
+                              ),
+                            ),
+                    ),
+
+                    // Location pin status indicator
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, left: 4),
+                      child: _selectedGeoPoint != null
+                          ? Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded,
+                                    color: Colors.green, size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Precise GPS coordinate locked ✓',
+                                  style: TextStyle(
+                                    color: Colors.green[600],
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Icon(Icons.info_outline_rounded,
+                                    color: Colors.orange[700], size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Drop a map pin to locate nearby pros',
+                                  style: TextStyle(
+                                    color: Colors.orange[700],
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                     const SizedBox(height: 20),
 
-                    // Phone Number
+                    // ── PHONE NUMBER ───────────────────────────────────
                     _buildTextField(
                       context: context,
                       controller: _phoneController,
-                      label: "Phone Number",
-                      hint: "10-digit mobile number",
-                      icon: Icons.phone_outlined,
+                      label: 'Contact Number',
+                      hint: '10-digit mobile number',
+                      icon: Icons.phone_android_rounded,
                       keyboardType: TextInputType.phone,
                       maxLength: 10,
                       validator: (v) {
-                        if (v == null || v.isEmpty) return "Required";
-                        if (v.length != 10) return "Must be 10 digits";
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (v.trim().length != 10) return 'Must be 10 digits';
                         return null;
                       },
                     ),
 
-                    // --- REMOVED BUDGET FIELD (Agent will quote) ---
+                    const SizedBox(height: 48),
 
-                    const SizedBox(height: 40),
-
+                    // ── SUBMIT BUTTON ──────────────────────────────────
                     SizedBox(
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _postJob,
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.primaryColor,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                            elevation: 2),
+                          backgroundColor: theme.colorScheme.primary,
+                          disabledBackgroundColor:
+                              theme.colorScheme.primary.withOpacity(0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 4,
+                          shadowColor:
+                              theme.colorScheme.primary.withOpacity(0.4),
+                        ),
                         child: _isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white)
-                            : const Text("Request Quote",
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text(
+                                'Request Quotes',
                                 style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white)),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -410,36 +734,73 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     );
   }
 
-  // --- Helper Widgets ---
-  Widget _buildPickerContainer(BuildContext context,
-      {required IconData icon, required String label, required String value}) {
+  // ─── HELPER WIDGETS ────────────────────────────────────────────────────────
+
+  Widget _buildPickerContainer(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isSelected = false,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+          width: 2,
+        ),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: Colors.grey[600]),
-              const SizedBox(width: 8),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[600])),
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : const Color(0xFF64748B),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87)),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: isSelected
+                  ? (isDark ? Colors.white : const Color(0xFF1E293B))
+                  : const Color(0xFFCBD5E1),
+            ),
+          ),
         ],
       ),
     );
@@ -454,19 +815,27 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
-    String? prefixText,
     Widget? suffixIcon,
     int? maxLength,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final inputBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87)),
-        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+            ),
+          ),
+        ),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
@@ -476,30 +845,44 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
           buildCounter: (context,
                   {required currentLength, required isFocused, maxLength}) =>
               null,
-          style: const TextStyle(color: Colors.black87),
+          style: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF1E293B),
+            fontWeight: FontWeight.w600,
+          ),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white,
-            prefixIcon: Icon(icon, color: Colors.grey.shade500),
-            prefixText: prefixText,
+            fillColor: inputBg,
+            prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 22),
             suffixIcon: suffixIcon,
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400),
+            hintStyle: const TextStyle(
+              color: Color(0xFFCBD5E1),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                    color: Theme.of(context).primaryColor, width: 2)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
+            ),
             errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.red)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+            ),
           ),
         ),
       ],

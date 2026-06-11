@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:servicesphere/features/auth/services/auth_services.dart';
 import 'package:servicesphere/features/profile/services/profile_service.dart';
 
-// --- SCREENS IMPORTS ---
 import 'package:servicesphere/features/profile/screens/edit_profile_screen.dart';
 import 'package:servicesphere/features/profile/screens/manage_addresses_screen.dart';
 import 'package:servicesphere/features/profile/screens/payment_methods_screen.dart';
@@ -24,76 +23,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
 
-  // --- DELETE ACCOUNT LOGIC ---
   Future<void> _deleteAccount() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Delete Account?"),
-        content: const Text(
-            "This is permanent. Your data and bookings will be wiped. Are you sure?"),
+        backgroundColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text("Delete Account?"),
+          ],
+        ),
+        content: Text(
+          "This is permanent. Your data and bookings will be wiped. Are you sure?",
+          style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancel",
+                  style: TextStyle(
+                      color: Colors.grey, fontWeight: FontWeight.bold))),
+          ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Delete Forever",
-                style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            child: const Text("Delete Forever"),
           ),
         ],
       ),
     );
 
     if (confirm != true) return;
-
     setState(() => _isLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // 1. Delete User Data from Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .delete();
-
-        // 2. Delete Authentication Account
         await user.delete();
-
-        // App will auto-navigate to Login because of AuthGate stream,
-        // but we force navigation just in case.
-        if (mounted) {
+        if (mounted)
           Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
-          );
-        }
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false);
       }
     } on FirebaseAuthException catch (e) {
-      // Security Check: If login is too old, ask them to re-login
-      if (e.code == 'requires-recent-login') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    "Security: Please Log Out and Log In again to delete account.")),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text("Error: $e")));
-        }
-      }
-    } catch (e) {
-      // Handle generic errors
-      if (mounted) {
+      if (e.code == 'requires-recent-login' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                "Security: Please Log Out and Log In again to delete account.")));
+      } else if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Error: $e")));
       }
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -102,71 +98,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // User App Colors
+    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F6FA);
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor:
-          const Color(0xFFF8F9FA), // Professional light grey background
+      backgroundColor: bgColor,
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _profileService.getUserDataStream(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
+          if (snapshot.hasError)
             return const Center(child: Text('Error loading profile.'));
-          }
 
           final userData = snapshot.data?.data();
           final String displayName = userData?['displayName'] ?? 'User';
           final String email = userData?['email'] ?? 'No Email';
 
-          // Use Firestore photo if available, otherwise fallback to Google Auth photo
           String photoUrl = userData?['photoUrl'] ?? '';
-          if (photoUrl.isEmpty) {
+          if (photoUrl.isEmpty)
             photoUrl = FirebaseAuth.instance.currentUser?.photoURL ?? '';
-          }
 
           return CustomScrollView(
             slivers: [
-              // --- 1. SLIVER APP BAR (Collapsible Header) ---
               SliverAppBar(
-                expandedHeight: 200.0,
+                expandedHeight: 220.0,
                 pinned: true,
-                backgroundColor: Colors.white,
+                backgroundColor:
+                    isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 elevation: 0,
+                iconTheme: IconThemeData(color: textColor),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
-                    color: Colors.white,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      border: Border(
+                          bottom: BorderSide(
+                              color: isDark
+                                  ? Colors.white10
+                                  : const Color(0xFFF1F5F9),
+                              width: 1)),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 40), // Spacer for status bar
-                        // Avatar with Edit Icon
+                        const SizedBox(height: 40),
                         GestureDetector(
                           onTap: () {
-                            if (userData != null) {
+                            if (userData != null)
                               Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => EditProfileScreen(
-                                    currentUserData: userData,
-                                  ),
-                                ),
-                              );
-                            }
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => EditProfileScreen(
+                                          currentUserData: userData)));
                           },
                           child: Stack(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: theme.colorScheme.primary
-                                        .withOpacity(0.2),
-                                    width: 2,
-                                  ),
-                                ),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.2),
+                                        width: 3)),
                                 child: CircleAvatar(
                                   radius: 45,
                                   backgroundColor:
@@ -180,11 +179,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                               ? displayName[0].toUpperCase()
                                               : 'U',
                                           style: TextStyle(
-                                            fontSize: 32,
-                                            fontWeight: FontWeight.bold,
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                        )
+                                              fontSize: 32,
+                                              fontWeight: FontWeight.bold,
+                                              color: theme.colorScheme.primary))
                                       : null,
                                 ),
                               ),
@@ -192,214 +189,137 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 bottom: 0,
                                 right: 0,
                                 child: Container(
-                                  padding: const EdgeInsets.all(6),
+                                  padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                        color: Colors.white, width: 2),
-                                  ),
-                                  child: const Icon(
-                                    Icons.edit,
-                                    size: 14,
-                                    color: Colors.white,
-                                  ),
+                                      color: theme.colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: cardColor, width: 3)),
+                                  child: const Icon(Icons.edit_rounded,
+                                      size: 14, color: Colors.white),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          displayName,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Text(
-                          email,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                        ),
+                        const SizedBox(height: 16),
+                        Text(displayName,
+                            style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: textColor)),
+                        const SizedBox(height: 4),
+                        Text(email,
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                                fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
                 ),
               ),
-
-              // --- 2. MENU OPTIONS ---
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle(context, "Account Settings"),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            ProfileMenuItem(
-                              title: 'Edit Profile',
-                              icon: Icons.person_outline,
-                              onTap: () {
-                                if (userData != null) {
-                                  Navigator.push(
+                      _buildSectionTitle("Account Settings", isDark),
+                      _buildMenuGroup([
+                        ProfileMenuItem(
+                            title: 'Edit Profile',
+                            icon: Icons.person_outline_rounded,
+                            onTap: () {
+                              if (userData != null)
+                                Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => EditProfileScreen(
-                                        currentUserData: userData,
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                            _buildDivider(),
-                            ProfileMenuItem(
-                              title: 'Manage Addresses',
-                              icon: Icons.location_on_outlined,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ManageAddressesScreen()),
-                                );
-                              },
-                            ),
-                            _buildDivider(),
-                            ProfileMenuItem(
-                              title: 'Payment Methods',
-                              icon: Icons.payment_outlined,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const PaymentMethodsScreen()),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-
+                                        builder: (context) => EditProfileScreen(
+                                            currentUserData: userData)));
+                            }),
+                        _buildDivider(isDark),
+                        ProfileMenuItem(
+                            title: 'Manage Addresses',
+                            icon: Icons.location_on_outlined,
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ManageAddressesScreen()))),
+                        _buildDivider(isDark),
+                        ProfileMenuItem(
+                            title: 'Payment Methods',
+                            icon: Icons.credit_card_rounded,
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const PaymentMethodsScreen()))),
+                      ], cardColor, isDark),
                       const SizedBox(height: 24),
-                      _buildSectionTitle(context, "App Settings"),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            ProfileMenuItem(
-                              title: 'Notifications',
-                              icon: Icons.notifications_none_rounded,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const NotificationsScreen()),
-                                );
-                              },
-                            ),
-                            _buildDivider(),
-                            ProfileMenuItem(
-                              title: 'Help & Support',
-                              icon: Icons.help_outline,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const HelpSupportScreen()),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-
+                      _buildSectionTitle("App Settings", isDark),
+                      _buildMenuGroup([
+                        ProfileMenuItem(
+                            title: 'Notifications',
+                            icon: Icons.notifications_none_rounded,
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const NotificationsScreen()))),
+                        _buildDivider(isDark),
+                        ProfileMenuItem(
+                            title: 'Help & Support',
+                            icon: Icons.help_outline_rounded,
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const HelpSupportScreen()))),
+                      ], cardColor, isDark),
                       const SizedBox(height: 24),
-                      // Logout Button
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ProfileMenuItem(
+                      _buildMenuGroup([
+                        ProfileMenuItem(
                           title: 'Log Out',
-                          icon: Icons.logout,
-                          textColor: Colors.red,
-                          iconColor: Colors.red,
+                          icon: Icons.logout_rounded,
+                          textColor: Colors.red.shade400,
+                          iconColor: Colors.red.shade400,
+                          isDestructive: true,
                           onTap: () {
                             _authService.signOut();
-                            // Navigate to Login Screen and remove all previous routes
                             Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => const LoginScreen()),
-                              (route) => false,
-                            );
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => const LoginScreen()),
+                                (route) => false);
                           },
                         ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // --- DELETE BUTTON (Added Here) ---
+                      ], cardColor, isDark),
+                      const SizedBox(height: 32),
                       if (_isLoading)
                         const Center(child: CircularProgressIndicator())
                       else
                         Center(
-                          child: TextButton.icon(
+                          child: OutlinedButton.icon(
                             onPressed: _deleteAccount,
-                            icon: const Icon(Icons.delete_forever,
+                            icon: const Icon(Icons.delete_forever_rounded,
                                 color: Colors.red),
                             label: const Text("Delete Account",
                                 style: TextStyle(
                                     color: Colors.red,
                                     fontWeight: FontWeight.bold)),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.redAccent),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
                         ),
-
                       const SizedBox(height: 40),
                     ],
                   ),
@@ -412,26 +332,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSectionTitle(BuildContext context, String title) {
+  Widget _buildSectionTitle(String title, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(left: 8.0),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[700],
-            ),
-      ),
+      padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
+      child: Text(title,
+          style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+              fontSize: 13,
+              letterSpacing: 0.5)),
     );
   }
 
-  Widget _buildDivider() {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      color: Colors.grey[100],
-      indent: 56, // Align with text start (icon width + padding)
+  Widget _buildMenuGroup(List<Widget> children, Color cardColor, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
+          ]),
+      child: Column(children: children),
     );
+  }
+
+  Widget _buildDivider(bool isDark) {
+    return Divider(
+        height: 1,
+        thickness: 1,
+        color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+        indent: 56);
   }
 }
 
@@ -441,46 +374,44 @@ class ProfileMenuItem extends StatelessWidget {
   final VoidCallback onTap;
   final Color? textColor;
   final Color? iconColor;
+  final bool isDestructive;
 
-  const ProfileMenuItem({
-    super.key,
-    required this.title,
-    required this.icon,
-    required this.onTap,
-    this.textColor,
-    this.iconColor,
-  });
+  const ProfileMenuItem(
+      {super.key,
+      required this.title,
+      required this.icon,
+      required this.onTap,
+      this.textColor,
+      this.iconColor,
+      this.isDestructive = false});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final defaultColor = isDestructive ? Colors.red : theme.colorScheme.primary;
+    final defaultTextColor = isDark ? Colors.white : const Color(0xFF1E293B);
+
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: (iconColor ?? Colors.black87).withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          icon,
-          color: iconColor ?? Colors.black87,
-          size: 20,
-        ),
+            color: (iconColor ?? defaultColor).withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12)),
+        child: Icon(icon, color: iconColor ?? defaultColor, size: 20),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: textColor ?? Colors.black87,
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-        ),
-      ),
-      trailing: const Icon(
-        Icons.chevron_right_rounded,
-        size: 20,
-        color: Colors.grey,
-      ),
+      title: Text(title,
+          style: TextStyle(
+              color: textColor ?? defaultTextColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 15)),
+      trailing: isDestructive
+          ? null
+          : Icon(Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: isDark ? Colors.white30 : const Color(0xFFCBD5E1)),
     );
   }
 }

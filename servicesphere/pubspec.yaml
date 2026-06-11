@@ -1,7 +1,7 @@
 name: servicesphere
 description: "A new Flutter project."
 publish_to: "none"
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ">=3.2.0 <4.0.0" # Use a standard SDK range
@@ -29,6 +29,9 @@ dependencies:
   permission_handler: ^12.0.1
   flutter_local_notifications: ^19.5.0
   firebase_messaging: ^15.2.10
+  cloud_functions: ^5.6.2
+  flutter_image_compress: ^2.3.0
+  razorpay_flutter: ^1.4.5
   
 
 dev_dependencies:

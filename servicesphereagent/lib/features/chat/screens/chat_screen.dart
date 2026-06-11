@@ -19,7 +19,27 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      final hasText = _controller.text.trim().isNotEmpty;
+      if (hasText != _hasText) {
+        setState(() => _hasText = hasText);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _sendMessage() async {
     if (_controller.text.trim().isEmpty) return;
@@ -37,37 +57,51 @@ class _ChatScreenState extends State<ChatScreen> {
             'senderId': _currentUserId,
             'timestamp': FieldValue.serverTimestamp(),
           });
+
+      // Scroll to latest message after send
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     } catch (e) {
       debugPrint("Error sending message: $e");
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Failed to send: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to send message. Please try again.")),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE5E5E5), // WhatsApp-like background
+      backgroundColor: isDark
+          ? const Color(0xFF1A1A1A)
+          : const Color(0xFFE5E5E5),
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               widget.otherUserName,
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const Text(
+              'Service Partner',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
             ),
           ],
         ),
-        backgroundColor: Colors.white,
         elevation: 1,
-        leading: const BackButton(color: Colors.black),
+        leading: const BackButton(),
       ),
       body: Column(
         children: [
@@ -82,7 +116,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text("Error: ${snapshot.error}"));
+                  return Center(
+                    child: Text("Something went wrong. Please try again."),
+                  );
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -112,13 +148,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
 
                 return ListView.builder(
+                  controller: _scrollController,
                   reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final bool isMe = data['senderId'] == _currentUserId;
-
                     return _buildMessageBubble(data, isMe);
                   },
                 );
@@ -129,13 +165,23 @@ class _ChatScreenState extends State<ChatScreen> {
           // --- INPUT AREA ---
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(color: Colors.white),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, -1),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
                     textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: (_) => _sendMessage(),
                     decoration: InputDecoration(
                       hintText: "Type a message...",
                       hintStyle: TextStyle(color: Colors.grey[400]),
@@ -144,7 +190,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         vertical: 10,
                       ),
                       filled: true,
-                      fillColor: const Color(0xFFF0F0F0),
+                      fillColor: isDark
+                          ? const Color(0xFF3D3D3D)
+                          : const Color(0xFFF0F0F0),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
@@ -154,11 +202,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: Colors.green, // WhatsApp Green
+                  backgroundColor: _hasText ? Colors.green : Colors.grey[400],
                   radius: 24,
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _sendMessage,
+                    onPressed: _hasText ? _sendMessage : null,
                   ),
                 ),
               ],
@@ -172,54 +220,87 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildMessageBubble(Map<String, dynamic> data, bool isMe) {
     final String message = data['text'] ?? '';
     final Timestamp? timestamp = data['timestamp'];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // FIX: Handle null timestamp (latency compensation)
     final String timeStr = timestamp != null
         ? DateFormat('h:mm a').format(timestamp.toDate())
         : 'Sending...';
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
+    final bubble = Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.72,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isMe
+            ? const Color(0xFFDCF8C6)
+            : isDark
+            ? const Color(0xFF2D2D2D)
+            : Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
+          bottomRight: isMe ? Radius.zero : const Radius.circular(16),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          // FIX: Explicit colors so it doesn't look "weird" on different themes
-          color: isMe ? const Color(0xFFDCF8C6) : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
-            bottomRight: isMe ? Radius.zero : const Radius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: TextStyle(
+              color: isDark && !isMe ? Colors.white : Colors.black87,
+              fontSize: 15,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end, // Align time to right
-          children: [
-            Text(
-              message,
-              style: const TextStyle(
-                color: Colors.black87, // Always dark text
-                fontSize: 15,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            timeStr,
+            style: TextStyle(color: Colors.grey[500], fontSize: 10),
+          ),
+        ],
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe) ...[
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: Colors.green[100],
+              child: Text(
+                widget.otherUserName.isNotEmpty
+                    ? widget.otherUserName[0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              timeStr,
-              style: TextStyle(color: Colors.grey[500], fontSize: 10),
-            ),
+            const SizedBox(width: 6),
           ],
-        ),
+          bubble,
+          if (isMe) const SizedBox(width: 6),
+        ],
       ),
     );
   }

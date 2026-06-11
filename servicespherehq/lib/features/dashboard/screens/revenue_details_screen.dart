@@ -8,17 +8,7 @@ class RevenueDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text(
-          "Revenue Breakdown",
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
-      ),
+      backgroundColor: const Color(0xFFF1F5F9), // Slate Background
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('serviceRequests')
@@ -27,128 +17,158 @@ class RevenueDetailsScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF0F172A)),
+            );
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState();
-          }
+          final docs = snapshot.data?.docs ?? [];
 
-          final docs = snapshot.data!.docs;
-
-          // --- CALCULATE TOTAL REVENUE ON THE FLY ---
           double totalRevenue = 0;
           for (var doc in docs) {
             final data = doc.data() as Map<String, dynamic>;
             final price = (data['price'] ?? 0).toDouble();
-            totalRevenue += (price * 0.10); // 10% Commission
+            totalRevenue += (price * 0.10);
           }
 
-          return Column(
-            children: [
-              // --- 1. TOTAL SUMMARY CARD ---
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E293B), Color(0xFF0F172A)], // Dark Navy
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+          return CustomScrollView(
+            slivers: [
+              // --- FINTECH HERO HEADER ---
+              SliverAppBar(
+                expandedHeight: 280.0,
+                pinned: true,
+                backgroundColor: const Color(0xFF0F172A),
+                iconTheme: const IconThemeData(color: Colors.white),
+                title: const Text(
+                  "Revenue Ledger",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
                 ),
-                child: Column(
-                  children: [
-                    const Text(
-                      "Total Net Revenue",
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "₹ ${NumberFormat('#,##0').format(totalRevenue)}",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        "${docs.length} Completed Jobs",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
+                    child: SafeArea(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 40),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              "TOTAL PLATFORM NET",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween<double>(begin: 0, end: totalRevenue),
+                            duration: const Duration(milliseconds: 1200),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) {
+                              return Text(
+                                "₹ ${NumberFormat('#,##0').format(value)}",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -1.5,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            "${docs.length} Completed Transactions",
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
 
-              // --- 2. LIST OF TRANSACTIONS ---
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: docs.length,
-                  separatorBuilder: (ctx, i) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    return _RevenueCard(data: data);
-                  },
+              // --- TRANSACTION LIST ---
+              if (docs.isEmpty)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 20,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.receipt_long_rounded,
+                            size: 48,
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "No revenue generated yet",
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 24,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: _RevenueCard(data: data),
+                      );
+                    }, childCount: docs.length),
+                  ),
                 ),
-              ),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.currency_rupee,
-              size: 40,
-              color: Colors.grey.shade400,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            "No revenue generated yet",
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -164,47 +184,41 @@ class _RevenueCard extends StatelessWidget {
     final String title = data['title'] ?? 'Service';
     final String agentName = data['agentName'] ?? 'Unknown Agent';
     final double jobPrice = (data['price'] ?? 0).toDouble();
-
-    // COMMISSION CALCULATION
     final double commission = jobPrice * 0.10;
 
     final Timestamp? completedAt = data['completedAt'];
-    String dateStr = 'Unknown';
-    if (completedAt != null) {
-      dateStr = DateFormat('MMM d, h:mm a').format(completedAt.toDate());
-    }
+    final String dateStr = completedAt != null
+        ? DateFormat('MMM d • h:mm a').format(completedAt.toDate())
+        : 'Unknown';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Row(
         children: [
-          // Icon Box
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFF10B981).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: const Icon(
-              Icons.currency_rupee, // Updated to Rupee
-              color: Colors.green,
-              size: 24,
+              Icons.call_received_rounded,
+              color: Color(0xFF10B981),
+              size: 22,
             ),
           ),
           const SizedBox(width: 16),
-
-          // Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,51 +226,43 @@ class _RevenueCard extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.black87,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.person_outline,
-                      size: 14,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      agentName,
-                      style: const TextStyle(color: Colors.grey, fontSize: 13),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
                 Text(
-                  dateStr,
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  agentName,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
           ),
-
-          // Amount
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 "+ ₹${commission.toStringAsFixed(0)}",
                 style: const TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.w800, // Extra Bold for Emphasis
+                  color: Color(0xFF10B981),
+                  fontWeight: FontWeight.w900,
                   fontSize: 18,
+                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                "Job Total: ₹${jobPrice.toStringAsFixed(0)}",
-                style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                dateStr,
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),

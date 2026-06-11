@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:servicesphereagent/features/jobs/screens/job_details_screen.dart';
 import 'package:servicesphereagent/features/jobs/screens/my_active_jobs_screen.dart';
@@ -18,522 +20,826 @@ class AgentHomeScreen extends StatefulWidget {
 
 class _AgentHomeScreenState extends State<AgentHomeScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
-  int _selectedIndex = 0; // Tracks the current tab
+  int _selectedIndex = 0;
 
-  // --- TOGGLE ONLINE STATUS ---
-  Future<void> _toggleOnlineStatus(bool currentValue) async {
+  // Agent rating — loaded once, not streamed
+  double _agentRating = 0.0;
+
+  // Location subscription
+  StreamSubscription<Position>? _locationSubscription;
+
+  // ─── LIFECYCLE ─────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAgentRating();
+    _startLocationUpdates();
+  }
+
+  @override
+  void dispose() {
+    _locationSubscription?.cancel();
+    super.dispose();
+  }
+
+  // ─── LOAD AGENT RATING ─────────────────────────────────────────────────────
+
+  Future<void> _loadAgentRating() async {
+    if (_user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('agents')
+          .doc(_user!.uid)
+          .get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _agentRating = (doc.data()?['rating'] ?? 0.0).toDouble();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading agent rating: $e');
+    }
+  }
+
+  // ─── LOCATION UPDATES ──────────────────────────────────────────────────────
+
+  Future<void> _startLocationUpdates() async {
+    if (_user == null) return;
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      _locationSubscription =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 50,
+            ),
+          ).listen((Position position) {
+            if (_user == null) return;
+            FirebaseFirestore.instance
+                .collection('agents')
+                .doc(_user!.uid)
+                .update({
+                  'latitude': position.latitude,
+                  'longitude': position.longitude,
+                  'locationUpdatedAt': DateTime.now().millisecondsSinceEpoch,
+                });
+          });
+    } catch (e) {
+      debugPrint('Location error: $e');
+    }
+  }
+
+  // ─── TOGGLE ONLINE ─────────────────────────────────────────────────────────
+
+  Future<void> _toggleOnlineStatus(bool newValue) async {
     if (_user == null) return;
     try {
       await FirebaseFirestore.instance
           .collection('agents')
           .doc(_user!.uid)
-          .update({'isOnline': !currentValue});
+          .update({'isOnline': newValue});
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
+
+  // ─── BUILD ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final String displayName =
-        _user?.displayName?.split(' ').first ?? 'Partner';
-    final String photoUrl = _user?.photoURL ?? '';
+    final isDark = theme.brightness == Brightness.dark;
+
+    final rawName = _user?.displayName?.split(' ').first ?? '';
+    final displayName = rawName.trim().isNotEmpty ? rawName.trim() : 'Partner';
+    final photoUrl = _user?.photoURL ?? '';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F9),
+      backgroundColor: isDark
+          ? const Color(0xFF121212)
+          : const Color(0xFFF4F6F9),
+      body: _buildBody(theme, isDark, displayName, photoUrl),
+      bottomNavigationBar: _buildNavBar(theme, isDark),
+    );
+  }
 
-      // --- 1. BODY SWITCHER ---
-      body: _buildBody(theme, displayName, photoUrl),
+  // ─── BOTTOM NAV ────────────────────────────────────────────────────────────
 
-      // --- 2. BOTTOM NAVIGATION BAR ---
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            return const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            );
-          }),
-        ),
-        child: NavigationBar(
-          selectedIndex: _selectedIndex,
-          onDestinationSelected: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-          backgroundColor: theme.primaryColor,
-          indicatorColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          elevation: 10,
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.dashboard_outlined, color: Colors.white70),
-              selectedIcon: Icon(Icons.dashboard, color: theme.primaryColor),
-              label: 'Home',
+  Widget _buildNavBar(ThemeData theme, bool isDark) {
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return TextStyle(
+            color: isSelected ? Colors.white : Colors.white60,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          );
+        }),
+      ),
+      child: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() => _selectedIndex = index);
+        },
+        backgroundColor: theme.colorScheme.primary,
+        indicatorColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 10,
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.dashboard_outlined, color: Colors.white60),
+            selectedIcon: Icon(
+              Icons.dashboard,
+              color: theme.colorScheme.primary,
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.list_alt, color: Colors.white70),
-              selectedIcon: Icon(Icons.list_alt, color: theme.primaryColor),
-              label: 'Jobs',
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.list_alt_outlined, color: Colors.white60),
+            selectedIcon: Icon(
+              Icons.list_alt,
+              color: theme.colorScheme.primary,
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.person_outline, color: Colors.white70),
-              selectedIcon: Icon(Icons.person, color: theme.primaryColor),
-              label: 'Profile',
-            ),
-          ],
-        ),
+            label: 'Jobs',
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.person_outline, color: Colors.white60),
+            selectedIcon: Icon(Icons.person, color: theme.colorScheme.primary),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }
 
-  // --- 3. BODY CONTENT SWITCHER ---
-  Widget _buildBody(ThemeData theme, String displayName, String photoUrl) {
+  // ─── BODY SWITCHER ─────────────────────────────────────────────────────────
+
+  Widget _buildBody(
+    ThemeData theme,
+    bool isDark,
+    String displayName,
+    String photoUrl,
+  ) {
     switch (_selectedIndex) {
       case 0:
-        return _buildDashboardView(theme, displayName, photoUrl);
+        return _buildDashboard(theme, isDark, displayName, photoUrl);
       case 1:
         return const JobsFeedScreen();
       case 2:
         return const AgentProfileScreen();
       default:
-        return _buildDashboardView(theme, displayName, photoUrl);
+        return _buildDashboard(theme, isDark, displayName, photoUrl);
     }
   }
 
-  // --- 4. THE DASHBOARD VIEW (With Online Switch) ---
-  Widget _buildDashboardView(
+  // ─── DASHBOARD ─────────────────────────────────────────────────────────────
+
+  Widget _buildDashboard(
     ThemeData theme,
+    bool isDark,
     String displayName,
     String photoUrl,
   ) {
-    // Wrap the whole dashboard in a StreamBuilder to listen for 'isOnline' status
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('agents')
           .doc(_user!.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        bool isOnline = false;
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          isOnline = data['isOnline'] ?? false;
-        }
+        final agentData = snapshot.hasData && snapshot.data!.exists
+            ? snapshot.data!.data() as Map<String, dynamic>
+            : <String, dynamic>{};
+
+        final bool isOnline = agentData['isOnline'] ?? false;
+        final double totalEarnings = (agentData['totalEarnings'] ?? 0.0)
+            .toDouble();
 
         return CustomScrollView(
           slivers: [
-            // --- APP BAR ---
-            SliverAppBar(
-              expandedHeight: 80.0,
-              floating: true,
-              pinned: true,
-              elevation: 0,
-              backgroundColor: Colors.white,
-              automaticallyImplyLeading: false,
-              title: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: theme.primaryColor.withOpacity(0.1),
-                    backgroundImage: photoUrl.isNotEmpty
-                        ? NetworkImage(photoUrl)
-                        : null,
-                    child: photoUrl.isEmpty
-                        ? Icon(Icons.person, color: theme.primaryColor)
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Hello, $displayName',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      // Dynamic Status Text
-                      Text(
-                        isOnline ? 'Online & Ready' : 'Offline',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: isOnline ? Colors.green : Colors.grey,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                // --- ONLINE TOGGLE SWITCH ---
-                Transform.scale(
-                  scale: 0.8,
-                  child: Switch(
-                    value: isOnline,
-                    activeColor: Colors.green,
-                    inactiveThumbColor: Colors.grey,
-                    inactiveTrackColor: Colors.grey.shade200,
-                    onChanged: (val) => _toggleOnlineStatus(isOnline),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Notifications coming soon!"),
-                      ),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
+            // ── APP BAR ──────────────────────────────────────────────
+            _buildAppBar(
+              theme: theme,
+              isDark: isDark,
+              displayName: displayName,
+              photoUrl: photoUrl,
+              isOnline: isOnline,
             ),
 
-            // --- STATS GRID ---
+            // ── EARNINGS + STATS ──────────────────────────────────────
             SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverToBoxAdapter(child: _buildRealTimeStats(context)),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: _EarningsCard(
+                  totalEarnings: totalEarnings,
+                  agentRating: _agentRating,
+                  userId: _user!.uid,
+                  onActiveJobsTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MyActiveJobsScreen(),
+                    ),
+                  ),
+                  onCompletedJobsTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MyCompletedJobsScreen(),
+                    ),
+                  ),
+                  onEarningsTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WalletScreen()),
+                  ),
+                ),
+              ),
             ),
 
-            // --- HEADER ---
+            // ── SECTION HEADER ────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "New Opportunities",
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      'New Opportunities',
+                      style: TextStyle(
                         fontSize: 18,
-                        color: Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() => _selectedIndex = 1);
-                      },
-                      child: const Text("See All"),
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedIndex = 1),
+                      child: Text(
+                        'See All',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
 
-            // --- JOB LIST ---
+            // ── NEARBY JOBS LIST ──────────────────────────────────────
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: _buildMarketplaceList(context),
+              sliver: _NearbyJobsSliver(userId: _user!.uid),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         );
       },
     );
   }
 
-  // --- STATS LOGIC ---
-  Widget _buildRealTimeStats(BuildContext context) {
-    if (_user == null) return const SizedBox();
+  // ─── APP BAR ───────────────────────────────────────────────────────────────
+
+  SliverAppBar _buildAppBar({
+    required ThemeData theme,
+    required bool isDark,
+    required String displayName,
+    required String photoUrl,
+    required bool isOnline,
+  }) {
+    return SliverAppBar(
+      floating: true,
+      pinned: true,
+      snap: false,
+      elevation: 0,
+      scrolledUnderElevation: 1,
+      automaticallyImplyLeading: false,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      title: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+            backgroundImage: photoUrl.isNotEmpty
+                ? NetworkImage(photoUrl)
+                : null,
+            child: photoUrl.isEmpty
+                ? Text(
+                    displayName[0].toUpperCase(),
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Hello, $displayName',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: isDark ? Colors.white : Colors.black87,
+                  height: 1.1,
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: isOnline ? Colors.green : Colors.grey,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isOnline ? 'Online & Ready' : 'Offline',
+                    style: TextStyle(
+                      color: isOnline ? Colors.green : Colors.grey,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        // Online toggle
+        Row(
+          children: [
+            Text(
+              isOnline ? 'Online' : 'Offline',
+              style: TextStyle(
+                fontSize: 11,
+                color: isOnline ? Colors.green : Colors.grey,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Transform.scale(
+              scale: 0.75,
+              child: Switch(
+                value: isOnline,
+                activeColor: Colors.green,
+                activeTrackColor: Colors.green.withOpacity(0.3),
+                inactiveThumbColor: Colors.grey,
+                inactiveTrackColor: Colors.grey.shade300,
+                onChanged: _toggleOnlineStatus,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EARNINGS CARD + STATS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _EarningsCard extends StatelessWidget {
+  final double totalEarnings;
+  final double agentRating;
+  final String userId;
+  final VoidCallback onActiveJobsTap;
+  final VoidCallback onCompletedJobsTap;
+  final VoidCallback onEarningsTap;
+
+  const _EarningsCard({
+    required this.totalEarnings,
+    required this.agentRating,
+    required this.userId,
+    required this.onActiveJobsTap,
+    required this.onCompletedJobsTap,
+    required this.onEarningsTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('serviceRequests')
-          .where('agentId', isEqualTo: _user!.uid)
+          .where('agentId', isEqualTo: userId)
+          .where('status', whereIn: ['accepted', 'in_progress', 'completed'])
           .snapshots(),
       builder: (context, snapshot) {
         int activeJobs = 0;
         int completedJobs = 0;
-        double earnings = 0.0;
 
         if (snapshot.hasData) {
-          for (var doc in snapshot.data!.docs) {
+          for (final doc in snapshot.data!.docs) {
             final data = doc.data() as Map<String, dynamic>;
-            final status = data['status'] ?? 'pending';
-            final price = (data['price'] ?? 0).toDouble();
-
+            final status = data['status'] ?? '';
             if (status == 'accepted' || status == 'in_progress') {
               activeJobs++;
             } else if (status == 'completed') {
               completedJobs++;
-              earnings += price;
             }
           }
         }
 
-        return StreamBuilder<DocumentSnapshot>(
+        return Column(
+          children: [
+            // ── EARNINGS CARD ───────────────────────────────────────
+            GestureDetector(
+              onTap: onEarningsTap,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      theme.colorScheme.primary,
+                      theme.colorScheme.primary.withOpacity(0.75),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withOpacity(0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Total Earnings',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '₹ ${NumberFormat('#,##0').format(totalEarnings)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.account_balance_wallet_outlined,
+                                  color: Colors.white70,
+                                  size: 12,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'View Wallet',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.currency_rupee_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── STATS ROW ───────────────────────────────────────────
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Active',
+                      value: activeJobs.toString(),
+                      icon: Icons.run_circle_outlined,
+                      iconColor: Colors.blue,
+                      onTap: onActiveJobsTap,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Done',
+                      value: completedJobs.toString(),
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: Colors.green,
+                      onTap: onCompletedJobsTap,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Rating',
+                      value: agentRating.toStringAsFixed(1),
+                      icon: Icons.star_rounded,
+                      iconColor: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STAT CARD
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+  final VoidCallback? onTap;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.grey.shade100,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEARBY JOBS SLIVER — client-side distance filtering
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _NearbyJobsSliver extends StatelessWidget {
+  final String userId;
+
+  const _NearbyJobsSliver({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('agents')
+          .doc(userId)
+          .snapshots(),
+      builder: (context, agentSnap) {
+        final agentData = agentSnap.hasData && agentSnap.data!.exists
+            ? agentSnap.data!.data() as Map<String, dynamic>
+            : <String, dynamic>{};
+
+        final double? agentLat = (agentData['latitude'] as num?)?.toDouble();
+        final double? agentLng = (agentData['longitude'] as num?)?.toDouble();
+
+        return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
-              .collection('agents')
-              .doc(_user!.uid)
+              .collection('serviceRequests')
+              .where('status', whereIn: ['pending', 'pending_quote'])
+              .orderBy('createdAt', descending: true)
+              .limit(50)
               .snapshots(),
-          builder: (context, agentSnap) {
-            double rating = 0.0;
-            if (agentSnap.hasData && agentSnap.data!.exists) {
-              rating = (agentSnap.data!.get('rating') ?? 0.0).toDouble();
+          builder: (context, jobSnap) {
+            if (jobSnap.connectionState == ConnectionState.waiting) {
+              return const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              );
             }
 
-            return Column(
-              children: [
-                // Earnings Card (Clickable)
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const WalletScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Theme.of(context).primaryColor,
-                          Theme.of(context).primaryColor.withOpacity(0.8),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(
-                            context,
-                          ).primaryColor.withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Total Earnings",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.currency_rupee,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          "₹ ${NumberFormat('#,##0').format(earnings)}",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            if (jobSnap.hasError) {
+              return SliverToBoxAdapter(
+                child: _EmptyJobState(
+                  icon: Icons.error_outline_rounded,
+                  message: 'Could not load jobs',
+                  subMessage: 'Check your connection and try again',
                 ),
-                const SizedBox(height: 12),
+              );
+            }
 
-                // Equal Sized Stats
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const MyActiveJobsScreen(),
-                              ),
-                            );
-                          },
-                          child: _buildStatCard(
-                            label: "Active",
-                            value: activeJobs.toString(),
-                            icon: Icons.run_circle_outlined,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const MyCompletedJobsScreen(),
-                              ),
-                            );
-                          },
-                          child: _buildStatCard(
-                            label: "Done",
-                            value: completedJobs.toString(),
-                            icon: Icons.check_circle_outline,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          label: "Rating",
-                          value: rating.toStringAsFixed(1),
-                          icon: Icons.star_rounded,
-                          color: Colors.orange,
-                        ),
-                      ),
-                    ],
-                  ),
+            var docs = jobSnap.data?.docs ?? [];
+
+            // Client-side distance filter
+            if (agentLat != null && agentLng != null) {
+              docs = docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final double? jobLat = (data['latitude'] as num?)?.toDouble();
+                final double? jobLng = (data['longitude'] as num?)?.toDouble();
+                if (jobLat == null || jobLng == null) return false;
+
+                final distanceMeters = Geolocator.distanceBetween(
+                  agentLat,
+                  agentLng,
+                  jobLat,
+                  jobLng,
+                );
+                return distanceMeters <= 5000;
+              }).toList();
+            }
+
+            if (docs.isEmpty) {
+              return SliverToBoxAdapter(
+                child: _EmptyJobState(
+                  icon: Icons.location_searching_rounded,
+                  message: 'No nearby jobs right now',
+                  subMessage: agentLat == null
+                      ? 'Enable location to see jobs near you'
+                      : 'Check back soon — new requests appear here',
                 ),
-              ],
+              );
+            }
+
+            return SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final doc = docs[index];
+                final data = doc.data() as Map<String, dynamic>;
+                return JobCardWidget(
+                  jobData: data,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          JobDetailsScreen(jobId: doc.id, jobData: data),
+                    ),
+                  ),
+                );
+              }, childCount: docs.length),
             );
           },
         );
       },
     );
   }
+}
 
-  Widget _buildStatCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMPTY STATE
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  Widget _buildMarketplaceList(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('serviceRequests')
-          .where('status', whereIn: ['pending', 'pending_quote'])
-          .orderBy('createdAt', descending: true)
-          .limit(10)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          );
-        }
+class _EmptyJobState extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final String subMessage;
 
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return SliverToBoxAdapter(child: _buildEmptyState(context));
-        }
+  const _EmptyJobState({
+    required this.icon,
+    required this.message,
+    required this.subMessage,
+  });
 
-        return SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            final job = docs[index];
-            final data = job.data() as Map<String, dynamic>;
-            return JobCardWidget(
-              jobData: data,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        JobDetailsScreen(jobId: job.id, jobData: data),
-                  ),
-                );
-              },
-            );
-          }, childCount: docs.length),
-        );
-      },
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  Widget _buildEmptyState(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(40),
       alignment: Alignment.center,
       child: Column(
         children: [
-          Icon(Icons.work_off_outlined, size: 60, color: Colors.grey[300]),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 40, color: Colors.grey[400]),
+          ),
           const SizedBox(height: 16),
           Text(
-            "No new requests nearby",
+            message,
             style: TextStyle(
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white70 : Colors.black87,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
             ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subMessage,
+            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -541,7 +847,10 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
   }
 }
 
-// --- REUSABLE JOB CARD ---
+// ═══════════════════════════════════════════════════════════════════════════════
+// REUSABLE JOB CARD (used on dashboard)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 class JobCardWidget extends StatelessWidget {
   final Map<String, dynamic> jobData;
   final VoidCallback onTap;
@@ -551,6 +860,8 @@ class JobCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final String category = (jobData['category'] ?? 'General').toString();
     final String title = jobData['title'] ?? 'Untitled Job';
     final String address = jobData['address'] ?? 'No location';
@@ -563,12 +874,13 @@ class JobCardWidget extends StatelessWidget {
       timeDisplay = DateFormat('MMM d, h:mm a').format(scheduledTime.toDate());
     } else if (timestamp != null) {
       final diff = DateTime.now().difference(timestamp.toDate());
-      if (diff.inDays > 0)
+      if (diff.inDays > 0) {
         timeDisplay = '${diff.inDays}d ago';
-      else if (diff.inHours > 0)
+      } else if (diff.inHours > 0) {
         timeDisplay = '${diff.inHours}h ago';
-      else
+      } else {
         timeDisplay = '${diff.inMinutes}m ago';
+      }
     }
 
     return GestureDetector(
@@ -576,11 +888,11 @@ class JobCardWidget extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -591,44 +903,55 @@ class JobCardWidget extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Icon
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.primaryColor.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.work, color: theme.primaryColor, size: 24),
+                child: Icon(
+                  Icons.work_outline_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 22,
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
+
+              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Category badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
-                        vertical: 4,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.grey[100],
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         category.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
+                          color: isDark ? Colors.white60 : Colors.grey[700],
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.black87,
+                        fontSize: 15,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -637,17 +960,17 @@ class JobCardWidget extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          Icons.location_on,
+                          Icons.location_on_outlined,
                           size: 12,
                           color: Colors.grey[400],
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 3),
                         Expanded(
                           child: Text(
                             address,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: Colors.grey[500],
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -659,40 +982,51 @@ class JobCardWidget extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+
+              // Right column — time + price
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
                       Icon(
-                        Icons.access_time,
-                        size: 12,
+                        Icons.access_time_rounded,
+                        size: 11,
                         color: Colors.grey[400],
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 3),
                       Text(
                         timeDisplay,
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[400]),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   price > 0
                       ? Text(
                           '₹ ${price.toStringAsFixed(0)}',
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 18,
-                            color: theme.primaryColor,
+                            color: theme.colorScheme.primary,
                           ),
                         )
-                      : Text(
-                          'Needs Quote',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: Colors.orange,
+                      : Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Quote',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.orange,
+                            ),
                           ),
                         ),
                 ],
