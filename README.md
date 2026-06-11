@@ -60,13 +60,7 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-## 📞 Contact
+> “Code is like humor. When you have to explain it, it’s bad.” – Cory House
 
-If you have any questions or suggestions, feel free to reach out:
 
-* **Email:** dhairyadudakiya52056@gmail.com
-* **LinkedIn:** [Dhairya Dudakiya](https://www.linkedin.com/in/dhairya-dudakiya)
-
----
-
-> This project was developed as a Final Year B.Tech Project.
+Thanks for visiting! 🚀
