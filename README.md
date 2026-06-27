@@ -5,11 +5,6 @@
 ![Status](https://img.shields.io/badge/Status-Closed%20Testing%20(Alpha)-green)
 ![License](https://img.shields.io/badge/License-MIT-purple)
 
-<!-- 📸 PRO TIP: Replace the div below with a Hero Image showing the 3 apps side-by-side -->
-<div align="center">
-  <img src="[link-to-your-hero-image.png]" alt="ServiceSphere App Mockups" width="800"/>
-</div>
-
 **ServiceSphere** is a hyperlocal home services marketplace that bridges the gap between customers and local service professionals (Electricians, Plumbers, Cleaners) in real-time. Built with **Flutter** and **Firebase**, it features a decentralized "Uber-style" job dispatch system, ensuring instant connections and secure transactions.
 
 ---
@@ -29,9 +24,6 @@ ServiceSphere provides a dual-app ecosystem:
 1.  **User App:** For customers to book services instantly.
 2.  **Partner App:** For agents to receive job alerts and manage earnings.
 3.  **Admin Panel:** For verification and platform management.
-
-<!-- 🎥 PRO TIP: Add a short GIF below showing the User App booking triggering a Partner App notification -->
-> *[Insert Demo GIF Here]*
 
 ---
 
@@ -77,11 +69,10 @@ Building a multi-sided marketplace requires precise data synchronization and sca
 
 ---
 
-## 📂 Explore My Other Ecosystem Builds
+## 📂 Explore My Other Work
 
-I specialize in end-to-end Flutter development. Check out my other projects:
+I specialize in end-to-end Flutter development. Check out my other featured project:
 * **[PharmaFinder]([link-to-repo]):** A medical store discovery and delivery platform featuring distinct User, Admin, and Rider interfaces.
-* **[Vimshottari Dasha Calculator]([link-to-repo]):** A specialized utility app showcasing complex mathematical sequence processing, custom UI, and automated Excel file generation.
 
 ---
 
