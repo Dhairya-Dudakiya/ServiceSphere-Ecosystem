@@ -5,6 +5,11 @@
 ![Status](https://img.shields.io/badge/Status-Closed%20Testing%20(Alpha)-green)
 ![License](https://img.shields.io/badge/License-MIT-purple)
 
+<!-- 📸 PRO TIP: Replace the div below with a Hero Image showing the 3 apps side-by-side -->
+<div align="center">
+  <img src="[link-to-your-hero-image.png]" alt="ServiceSphere App Mockups" width="800"/>
+</div>
+
 **ServiceSphere** is a hyperlocal home services marketplace that bridges the gap between customers and local service professionals (Electricians, Plumbers, Cleaners) in real-time. Built with **Flutter** and **Firebase**, it features a decentralized "Uber-style" job dispatch system, ensuring instant connections and secure transactions.
 
 ---
@@ -24,6 +29,9 @@ ServiceSphere provides a dual-app ecosystem:
 1.  **User App:** For customers to book services instantly.
 2.  **Partner App:** For agents to receive job alerts and manage earnings.
 3.  **Admin Panel:** For verification and platform management.
+
+<!-- 🎥 PRO TIP: Add a short GIF below showing the User App booking triggering a Partner App notification -->
+> *[Insert Demo GIF Here]*
 
 ---
 
@@ -47,6 +55,15 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
+## 🧠 Technical Challenges Conquered
+
+Building a multi-sided marketplace requires precise data synchronization and scalable state management. 
+* **Real-Time Job Dispatch:** Engineered a "Broadcast-and-Claim" system utilizing Firebase Cloud Functions and Firestore real-time listeners. When a user requests a service, the backend instantly calculates proximity and broadcasts the job to all online, qualified agents within the radius. The first to claim it locks the transaction, utilizing Firestore transactions to prevent double-booking.
+* **State Management Strategy:** Implemented **Provider** paired with an **MVVM (Model-View-ViewModel)** architecture. This decoupled the UI from the heavy backend business logic, ensuring smooth 60fps scrolling even when live-tracking agents on the map.
+* **Secure Ecosystem:** Handled complex role-based access control (RBAC) across three distinct interfaces (User, Agent, Admin) using custom Firebase Auth claims.
+
+---
+
 ## 🛠️ Tech Stack
 
 | Component | Technology |
@@ -60,7 +77,24 @@ ServiceSphere provides a dual-app ecosystem:
 
 ---
 
-> “Code is like humor. When you have to explain it, it’s bad.” – Cory House
+## 📂 Explore My Other Ecosystem Builds
 
+I specialize in end-to-end Flutter development. Check out my other projects:
+* **[PharmaFinder]([link-to-repo]):** A medical store discovery and delivery platform featuring distinct User, Admin, and Rider interfaces.
+* **[Vimshottari Dasha Calculator]([link-to-repo]):** A specialized utility app showcasing complex mathematical sequence processing, custom UI, and automated Excel file generation.
+
+---
+
+## 👨‍💻 About the Developer
+
+Hi, I'm Dhairya Dudakiya. I hold a B.Tech in Computer Engineering and currently work as a **Freelance Flutter Developer**. I specialize in building complex, cross-platform mobile ecosystems from architecture planning to final app store deployment. 
+
+📫 **Open for Freelance Projects:** If you need a custom mobile solution, an MVP, or backend integration, let's connect! 
+* **LinkedIn:** [Your Profile Link]
+* **Email:** [Your Email Address]
+
+---
+
+> “Code is like humor. When you have to explain it, it’s bad.” – Cory House
 
 Thanks for visiting! 🚀
