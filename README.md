@@ -72,7 +72,7 @@ Building a multi-sided marketplace requires precise data synchronization and sca
 ## 📂 Explore My Other Work
 
 I specialize in end-to-end Flutter development. Check out my other featured project:
-* **[PharmaFinder]([https://github.com/Dhairya-Dudakiya/PharmaFinder-Ecosystem]):** A medical store discovery and delivery platform featuring distinct User, Admin, and Rider interfaces.
+* **[PharmaFinder](https://github.com/Dhairya-Dudakiya/PharmaFinder-Ecosystem):** A medical store discovery and delivery platform featuring distinct User, Admin, and Rider interfaces.
 
 ---
 
@@ -81,8 +81,8 @@ I specialize in end-to-end Flutter development. Check out my other featured proj
 Hi, I'm Dhairya Dudakiya. I hold a B.Tech in Computer Engineering and currently work as a **Freelance Flutter Developer**. I specialize in building complex, cross-platform mobile ecosystems from architecture planning to final app store deployment. 
 
 📫 **Open for Freelance Projects:** If you need a custom mobile solution, an MVP, or backend integration, let's connect! 
-* **LinkedIn:** [www.linkedin.com/in/dhaiirya-dudakiya]
-* **Email:** [dhairyadudakiya52056@gmail.com]
+* **LinkedIn:** [dhaiirya-dudakiya](https://www.linkedin.com/in/dhaiirya-dudakiya)
+* **Email:** [dhairyadudakiya52056@gmail.com](mailto:dhairyadudakiya52056@gmail.com)
 
 ---
 
